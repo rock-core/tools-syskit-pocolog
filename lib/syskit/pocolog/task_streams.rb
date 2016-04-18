@@ -5,6 +5,32 @@ module Syskit::Pocolog
     # It is returned from the main stream pool by
     # {Streams#find_task_by_name)
     class TaskStreams < Streams
+        # Returns the task name for all streams in self
+        #
+        # @raise (see unique_metadata)
+        def task_name
+            unique_metadata('rock_task_name')
+        end
+
+        # Returns the orogen model name for all streams in self
+        #
+        # @raise (see unique_metadata)
+        def orogen_model_name
+            unique_metadata('rock_task_model')
+        end
+
+        # Returns the Syskit model for the orogen model name in
+        # {#orogen_model_name}
+        #
+        # @raise (see orogen_model_name)
+        def model
+            name = orogen_model_name
+            if model = Syskit::TaskContext.find_model_from_orogen_name(name)
+                model
+            else raise Unknown, "cannot find a Syskit model for #{name}"
+            end
+        end
+
         # Find a port stream that matches the given name
         def find_port_by_name(name)
             objects = find_all_streams(RockStreamMatcher.new.ports.object_name(name))
@@ -30,6 +56,34 @@ module Syskit::Pocolog
                 self, m, args,
                 "port" => "find_port_by_name",
                 "property" => "find_property_by_name") || super
+        end
+
+        # @api private
+        #
+        # Resolves a metadata that must be unique among all the streams
+        #
+        # @raise Unknown if there are no streams, if they have different values
+        #   for the metadata or if at least one of them does not have a value for
+        #   the metadata.
+        # @raise Ambiguous if some streams have different values for the
+        #   metadata
+        def unique_metadata(metadata_name)
+            if streams.empty?
+                raise Unknown, "no streams"
+            end
+
+            model_name = nil
+            streams.each do |s|
+                if name = s.metadata[metadata_name]
+                    model_name ||= name
+                    if model_name != name
+                        raise Ambiguous, "streams declare more than one value for #{metadata_name}: #{model_name} and #{name}"
+                    end
+                else
+                    raise Unknown, "stream #{s.name} does not declare the #{metadata_name} metadata"
+                end
+            end
+            model_name
         end
     end
 end

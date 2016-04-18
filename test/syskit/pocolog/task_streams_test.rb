@@ -97,5 +97,58 @@ module Syskit::Pocolog
                 end
             end
         end
+
+        describe "#orogen_model_name" do
+            describe "no model declared at all" do
+                it "raises Unknown if none is declared in the streams" do
+                    assert_raises(Unknown) do
+                        subject.orogen_model_name
+                    end
+                end
+                it "raises Unknown if the streams are empty" do
+                    assert_raises(Unknown) do
+                        TaskStreams.new([]).orogen_model_name
+                    end
+                end
+            end
+
+            describe "models are declared" do
+                before do
+                    subject.streams.each do |s|
+                        s.metadata['rock_task_model'] = 'orogen::Model'
+                    end
+                end
+
+                it "raises Unknown if some streams do not have a declared model" do
+                    subject.streams.first.metadata.delete('rock_task_model')
+                    assert_raises(Unknown) do
+                        subject.orogen_model_name
+                    end
+                end
+                it "raises Ambiguous if the streams declare multiple models" do
+                    subject.streams.first.metadata['rock_task_model'] = 'orogen::AnotherModel'
+                    assert_raises(Ambiguous) do
+                        subject.orogen_model_name
+                    end
+                end
+                it "returns the model if there is only one" do
+                    assert_equal 'orogen::Model', subject.orogen_model_name
+                end
+
+                describe "#model" do
+                    it "returns the resolved model" do
+                        task_m = Syskit::TaskContext.new_submodel(name: 'orogen::Model')
+                        flexmock(task_m.orogen_model).should_receive(:name).and_return('orogen::Model')
+                        assert_equal task_m, subject.model
+                    end
+                    it "raises Unknown if the model cannot be resolved" do
+                        assert_raises(Unknown) do
+                            subject.model
+                        end
+                    end
+                end
+            end
+        end
     end
 end
+

@@ -8,6 +8,10 @@ module Syskit::Pocolog
         attr_reader :created_log_dir
         attr_reader :created_log_file
 
+        def created_log_path
+            created_log_file.io.first.path
+        end
+
         def setup
             @pocolog_log_level = ::Pocolog.logger.level
             ::Pocolog.logger.level = Logger::WARN
