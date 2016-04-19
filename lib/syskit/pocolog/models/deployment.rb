@@ -3,17 +3,34 @@ module Syskit::Pocolog
         # Metamodel for {Syskit::Pocolog::Deployment}
         module Deployment
             # Pocolog deployments only have a single task. This is it
+            #
+            # @return [Syskit::Models::TaskContext]
             attr_reader :task_model
 
             # Mappings from streams to ports
+            #
+            # @see add_stream add_streams_from
             attr_reader :streams_to_port
 
-            def new_submodel(task_name: nil, task_model: nil, **options, &block)
+            # Create a new deployment model
+            #
+            # Unlike the Syskit deployment models, this does not yield. The task
+            # model is instead supposed to be given as the task_model argument.
+            #
+            # @param [String] task_name the task name
+            # @param [Syskit::Models::TaskContext] task_model the task model. It
+            #   is available on the generated model through {#task_model}
+            # @param options the standard options given to super
+            # @return [Syskit::Pocolog::Models::Deployment]
+            def new_submodel(task_name: nil, task_model: nil, **options)
                 super(**options) do
                     task task_name, task_model.orogen_model
                 end
             end
 
+            # @api private
+            #
+            # Callback called by metaruby in {#new_submodel}
             def setup_submodel(submodel, **options, &block)
                 super
                 orogen_model = submodel.each_orogen_deployed_task_context_model.first
@@ -50,6 +67,15 @@ module Syskit::Pocolog
             end
 
             # Add a stream-to-port mapping
+            #
+            # @param [Pocolog::DataStream] stream the data stream
+            # @param [Syskit::Models::OutputPort] port the output port that
+            #   should output the stream's data.
+            # @return [void]
+            #
+            # @raise ArgumentError if the port is not an output port
+            # @raise ArgumentError if the port is not from {#task_model}
+            # @raise MismatchingType if the port and stream have differing types
             def add_stream(stream, port = task_model.port_by_name(stream.metadata['rock_task_object_name']))
                 if !port.output?
                     raise ArgumentError, "cannot map a log stream to an input port"
