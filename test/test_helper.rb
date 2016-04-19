@@ -56,8 +56,11 @@ module Syskit::Pocolog
         # Create a log stream on the last file created with
         # {#create_log_file}
         def create_log_stream(name, typename, metadata = Hash.new)
-            registry = Typelib::Registry.new
-            type = registry.create_null typename
+            if typename.respond_to?(:to_str)
+                registry = Typelib::Registry.new
+                type = registry.create_null typename
+            else type = typename
+            end
             created_log_file.create_stream name, type, metadata
         end
     end
