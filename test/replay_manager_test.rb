@@ -95,40 +95,6 @@ module Syskit::Pocolog
                 assert_equal Hash[], subject.stream_to_deployment
             end
         end
-
-        describe ".register" do
-            it "registers the task on the execution engine's replay manager" do
-                plan.add(deployment_task = deployment_m.new)
-                flexmock(execution_engine.pocolog_replay_manager).
-                    should_receive(:register).
-                    with(deployment_task).once
-                ReplayManager.register(deployment_task)
-            end
-            it "raises ArgumentError if the task is not included in an executable plan" do
-                deployment_task = deployment_m.new
-                assert_raises(ArgumentError) do
-                    ReplayManager.register(deployment_task)
-                end
-            end
-        end
-
-        describe ".deregister" do
-            attr_reader :deployment_task
-
-            before do
-                plan.add(@deployment_task = deployment_m.new)
-                ReplayManager.register(deployment_task)
-            end
-            it "deregisters the task from the replay manager" do
-                flexmock(execution_engine.pocolog_replay_manager).should_receive(:deregister).with(deployment_task).once
-                ReplayManager.deregister(deployment_task)
-            end
-            it "raises if the task is in no plan" do
-                assert_raises(ArgumentError) do
-                    ReplayManager.deregister(deployment_m.new)
-                end
-            end
-        end
     end
 end
 

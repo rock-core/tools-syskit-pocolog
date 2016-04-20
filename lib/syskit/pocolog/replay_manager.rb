@@ -8,30 +8,6 @@ module Syskit::Pocolog
     # deployment tasks is through {.register} and {.deregister}, which are
     # already automatically called on the deployment's start/stop events.
     class ReplayManager
-        # Register a deployment task
-        #
-        # @param (see #register)
-        # @raise (see #register)
-        # @return (see #register)
-        def self.register(deployment_task)
-            if !(engine = deployment_task.execution_engine)
-                raise ArgumentError, "cannot call .register on a task not yet included in an executable plan"
-            end
-            engine.pocolog_replay_manager.register(deployment_task)
-        end
-
-        # Deregisters a deployment task from its replay manager
-        #
-        # @param (see #register)
-        # @raise (see #register)
-        # @return (see #register)
-        def self.deregister(deployment_task)
-            if !(engine = deployment_task.execution_engine)
-                raise ArgumentError, "cannot call .register on a task not yet included in an executable plan"
-            end
-            engine.pocolog_replay_manager.deregister(deployment_task)
-        end
-
         # The underlying stream aligner
         # 
         # @return [Pocolog::StreamAligner]
