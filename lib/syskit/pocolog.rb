@@ -15,5 +15,7 @@ require "syskit/pocolog/configuration"
 
 require "syskit/pocolog/models/deployment"
 require "syskit/pocolog/deployment"
+require "syskit/pocolog/execution_engine_extension"
+require "syskit/pocolog/replay_manager"
 
 

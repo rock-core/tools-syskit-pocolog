@@ -87,6 +87,14 @@ module Syskit::Pocolog
 
                 streams_to_port[stream] = port
             end
+
+            # Enumerate the declared stream-to-port mappings
+            #
+            # @yieldparam [Pocolog::DataStream] stream
+            # @yieldparam [Syskit::Models::OutputPort] output_port
+            def each_stream_mapping(&block)
+                streams_to_port.each(&block)
+            end
         end
     end
 end
