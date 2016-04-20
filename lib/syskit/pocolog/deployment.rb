@@ -7,5 +7,44 @@ module Syskit::Pocolog
     # with a deployment task, and removed when the deployment is removed.
     class Deployment < Syskit::Deployment
         extend Models::Deployment
+
+        attr_reader :stream_to_port
+
+        def initialize(options = Hash.new)
+            super
+            @stream_to_port = Hash.new
+        end
+
+        def replay_manager
+            execution_engine.pocolog_replay_manager
+        end
+
+        on :start do |context|
+            replay_manager.register(self)
+            ready_event.emit
+        end
+
+        on :stop do |context|
+            replay_manager.deregister(self)
+        end
+
+        def added_execution_agent_parent(executed_task, _info)
+            super
+            executed_task.start_event.on do
+                model.each_stream_mapping do |stream, model_port|
+                    orocos_port = model_port.bind(executed_task).to_orocos_port
+                    stream_to_port[stream] = orocos_port
+                end
+            end
+            executed_task.stop_event.on do
+                stream_to_port.clear
+            end
+        end
+
+        def process_sample(stream, time, sample)
+            if orocos_port = stream_to_port[stream]
+                orocos_port.write(sample)
+            end
+        end
     end
 end

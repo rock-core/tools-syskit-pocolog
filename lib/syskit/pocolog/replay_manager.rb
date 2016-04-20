@@ -36,7 +36,9 @@ module Syskit::Pocolog
                     new_streams << s
                 end
             end
-            stream_aligner.add_streams(*new_streams)
+            if stream_aligner.add_streams(*new_streams)
+                stream_aligner.step_back
+            end
         end
 
         # Deregisters a deployment task
@@ -61,6 +63,8 @@ module Syskit::Pocolog
         # Process the next sample, and feed it to the relevant deployment(s)
         def step
             stream_index, time, sample = stream_aligner.step
+            return if !stream_index
+
             stream = stream_aligner.streams[stream_index]
             stream_to_deployment[stream].each do |task|
                 task.process_sample(stream, time, sample)
