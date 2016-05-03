@@ -13,8 +13,8 @@ module Syskit::Pocolog
                 assert_equal ['/task.file'], subject.each_stream.map(&:name)
             end
 
-            it "raises if the file does not exist" do
-                assert_raises(ArgumentError) { subject.add_file(Pathname('does_not_exist')) }
+            it "raises ENOENT if the file does not exist" do
+                assert_raises(Errno::ENOENT) { subject.add_file(Pathname('does_not_exist')) }
             end
         end
 
@@ -33,23 +33,52 @@ module Syskit::Pocolog
         end
 
         describe "#add_dir" do
+            it "raises ENOENT if the directory does not exist" do
+                assert_raises(Errno::ENOENT) { subject.add_dir(Pathname.new("does_not_exist")) }
+            end
             it "ignores the files that do not match the .NUM.log pattern" do
                 create_log_dir
                 FileUtils.touch((created_log_dir + "a.file").to_s)
-                flexmock(subject).should_receive(:add_file).never
+                flexmock(subject).should_receive(:add_file_group).never
                 subject.add_dir(created_log_dir)
             end
             it "adds files that match the .NUM.log pattern" do
                 create_log_file 'test0'
                 create_log_file 'test1'
                 create_log_file 'test2'
-                flexmock(subject).should_receive(:add_file).
-                    with(created_log_dir + 'test0.0.log').once
-                flexmock(subject).should_receive(:add_file).
-                    with(created_log_dir + 'test1.0.log').once
-                flexmock(subject).should_receive(:add_file).
-                    with(created_log_dir + 'test2.0.log').once
+                flexmock(subject).should_receive(:add_file_group).
+                    with([created_log_dir + 'test0.0.log']).once
+                flexmock(subject).should_receive(:add_file_group).
+                    with([created_log_dir + 'test1.0.log']).once
+                flexmock(subject).should_receive(:add_file_group).
+                    with([created_log_dir + 'test2.0.log']).once
                 subject.add_dir(created_log_dir)
+            end
+
+            it "opens files that belong together, together" do
+                _, file = create_log_file 'test0'
+                file.new_file
+                create_log_file 'test1'
+                flexmock(subject).should_receive(:add_file_group).
+                    with([created_log_dir + 'test0.0.log', created_log_dir + "test0.1.log"]).once
+                flexmock(subject).should_receive(:add_file_group).
+                    with([created_log_dir + 'test1.0.log']).once
+                subject.add_dir(created_log_dir)
+            end
+        end
+
+        describe "#make_file_groups_in_dir" do
+            it "groups files that have the same basename together" do
+                _, file = create_log_file 'test0'
+                file.new_file
+                file.new_file
+                create_log_file 'test1'
+                groups = subject.make_file_groups_in_dir(created_log_dir)
+                expected = [
+                    [(created_log_dir + 'test0.0.log'), (created_log_dir + 'test0.1.log'), (created_log_dir + 'test0.2.log')],
+                    [created_log_dir + 'test1.0.log']
+                ]
+                assert_equal expected, groups
             end
         end
 
