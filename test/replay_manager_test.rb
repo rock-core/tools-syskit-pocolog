@@ -18,7 +18,9 @@ module Syskit::Pocolog
             @task_m = Syskit::TaskContext.new_submodel do
                 output_port 'out', double_t
             end
-            @subject = ReplayManager.new
+            
+            plan = Roby::ExecutablePlan.new
+            @subject = ReplayManager.new(plan.execution_engine)
 
             @deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
             deployment_m.add_streams_from streams
@@ -93,6 +95,138 @@ module Syskit::Pocolog
                 subject.register(deployment_task)
                 subject.deregister(deployment_task)
                 assert_equal Hash[], subject.stream_to_deployment
+            end
+        end
+
+        describe "realtime replay" do
+            it "raises RuntimeError in #start if it is already running" do
+                subject.start
+                assert_raises(RuntimeError) { subject.start }
+            end
+
+            it "is running after a call to #start" do
+                subject.start
+                assert subject.running?
+            end
+
+            it "raises RuntimeError if #stop is called while it is not running" do
+                assert_raises(RuntimeError) { subject.stop }
+            end
+
+            it "is not running after a call to #stop" do
+                subject.start
+                subject.stop
+                assert !subject.running?
+            end
+
+            it "installs a handler that calls #process_in_realtime once in each cycle" do
+                subject.execution_engine.execute_one_cycle
+                subject.start(replay_speed: 10)
+                flexmock(subject).should_receive(:process_in_realtime).twice.with(10)
+                subject.execution_engine.execute_one_cycle
+                subject.execution_engine.execute_one_cycle
+                subject.stop
+                subject.execution_engine.execute_one_cycle
+            end
+        end
+
+        describe "#process_in_realtime" do
+            before do
+                mng = Orocos::RubyTasks::ProcessManager.new(Roby.app.default_loader)
+                Syskit.conf.register_process_server('pocolog', mng)
+
+                double_t = Roby.app.default_loader.registry.get '/double'
+
+                create_log_file 'test'
+                stream0 = create_log_stream '/port0', double_t,
+                    'rock_task_name' => "task",
+                    'rock_task_object_name' => 'out',
+                    'rock_stream_type' => 'port'
+                stream0.write Time.at(0), Time.at(0), 0
+                stream0.write Time.at(0), Time.at(1), 1
+                stream0.write Time.at(0), Time.at(2), 2
+                flush_log_file
+
+                streams = Streams.from_dir(created_log_dir).
+                    find_task_by_name('task')
+                port_stream = streams.find_port_by_name('out')
+                task_m = Syskit::TaskContext.new_submodel do
+                    output_port 'out', double_t
+                end
+
+                deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
+                deployment_m.add_streams_from streams
+                plan.add_permanent_task(deployment = deployment_m.new(process_name: 'test', on: 'pocolog'))
+                deployment.start!
+                deployment.ready_event.emit
+
+                @subject = plan.execution_engine.pocolog_replay_manager
+                subject.reset_replay_base_times
+                flexmock(subject)
+            end
+
+            it "plays as many samples as required to match real and expected logical time" do
+                subject.should_receive(:sleep)
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                subject.should_receive(:dispatch).once.with(0, Time.at(0)).
+                    and_return { realtime += 1 }
+                subject.should_receive(:dispatch).once.with(0, Time.at(1)).
+                    and_return { realtime += 1 }
+                subject.process_in_realtime(1, limit_real_time: realtime + 1.1)
+            end
+
+            it "applies the speed to the sample limit" do
+                subject.should_receive(:sleep)
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                subject.should_receive(:dispatch).once.with(0, Time.at(0)).
+                    and_return { realtime += 1 }
+                subject.should_receive(:dispatch).once.with(0, Time.at(1)).
+                    and_return { realtime += 1 }
+                subject.process_in_realtime(2, limit_real_time: realtime + 0.55)
+            end
+
+            it "returns true if there are samples left to play" do
+                subject.should_receive(:sleep)
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                assert subject.process_in_realtime(1, limit_real_time: realtime + 1.1)
+            end
+
+            it "returns false on eof" do
+                subject.should_receive(:sleep)
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                assert !subject.process_in_realtime(1, limit_real_time: realtime + 2.1)
+            end
+
+            it "sleeps between samples" do
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                subject.should_receive(:dispatch).with(0, Time.at(0)).globally.ordered
+                subject.should_receive(:sleep).explicitly.with(1).once.globally.ordered.
+                    and_return { realtime += 1 }
+                subject.should_receive(:dispatch).with(0, Time.at(1)).globally.ordered.
+                    and_return { realtime += 1 }
+                subject.process_in_realtime(1, limit_real_time: realtime + 1.1)
+            end
+
+            it "applies the replay speed to the sleeping times" do
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                subject.should_receive(:dispatch)
+                subject.should_receive(:sleep).explicitly.with(0.5).once.globally.ordered.
+                    and_return { realtime += 0.5 }
+                subject.process_in_realtime(2, limit_real_time: realtime + 0.55)
+            end
+
+            it "does not sleep if the required sleep time is below MIN_TIME_DIFF_TO_SLEEP" do
+                realtime = subject.base_real_time
+                flexmock(Time).should_receive(:now).and_return { realtime }
+                subject.should_receive(:dispatch)
+                subject.should_receive(:sleep).explicitly.never
+                subject.process_in_realtime(1000, limit_real_time: realtime + 0.0011)
             end
         end
     end
