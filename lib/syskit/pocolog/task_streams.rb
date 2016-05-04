@@ -31,6 +31,11 @@ module Syskit::Pocolog
             end
         end
 
+        # Returns the replay task model for this streams
+        def replay_model
+            ReplayTaskContext.model_for(model.orogen_model)
+        end
+
         # Find a port stream that matches the given name
         def find_port_by_name(name)
             objects = find_all_streams(RockStreamMatcher.new.ports.object_name(name))
@@ -84,6 +89,14 @@ module Syskit::Pocolog
                 end
             end
             model_name
+        end
+
+        def to_instance_requirements
+            self.replay_model.to_instance_requirements.prefer_deployed_tasks(task_name)
+        end
+
+        def as_plan
+            to_instance_requirements.as_plan
         end
     end
 end

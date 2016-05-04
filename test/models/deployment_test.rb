@@ -43,8 +43,9 @@ module Syskit::Pocolog
                     it "raises MismatchingType if the stream and port have different types" do
                         streams = Streams.from_dir(created_log_dir).
                             find_task_by_name('task_with_mismatching_type')
+                        replay_task_m = Syskit::Pocolog::ReplayTaskContext.model_for(task_m.orogen_model)
                         assert_raises(MismatchingType) do
-                            deployment_m.add_stream(streams.find_port_by_name('port_with_mismatching_type'), task_m.out_port)
+                            deployment_m.add_stream(streams.find_port_by_name('port_with_mismatching_type'), replay_task_m.out_port)
                         end
                     end
                     it "raises ArgumentError if the port is an input port" do
@@ -58,9 +59,10 @@ module Syskit::Pocolog
                     task_m = Syskit::TaskContext.new_submodel do
                         output_port 'object0', '/double'
                     end
+                    replay_task_m = Syskit::Pocolog::ReplayTaskContext.model_for(task_m.orogen_model)
                     deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
                     deployment_m.add_stream(port_stream = streams.find_port_by_name('object0'))
-                    assert_equal Hash[port_stream => task_m.object0_port],
+                    assert_equal Hash[port_stream => replay_task_m.object0_port],
                         deployment_m.streams_to_port
                 end
             end
@@ -89,9 +91,10 @@ module Syskit::Pocolog
                     task_m = Syskit::TaskContext.new_submodel do
                         output_port 'object0', '/double'
                     end
+                    replay_task_m = Syskit::Pocolog::ReplayTaskContext.model_for(task_m.orogen_model)
                     deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_name: 'test', task_model: task_m)
                     flexmock(deployment_m).should_receive(:add_stream).
-                        with(streams.find_port_by_name('object0'), task_m.object0_port).
+                        with(streams.find_port_by_name('object0'), replay_task_m.object0_port).
                         once
                     deployment_m.add_streams_from(streams)
                 end

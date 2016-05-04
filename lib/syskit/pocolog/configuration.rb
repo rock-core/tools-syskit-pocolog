@@ -3,7 +3,7 @@ module Syskit::Pocolog
     # replaying tasks
     module Configuration
         # Expose a given set of streams as a task context in Syskit
-        def use_pocolog_task(streams, name: streams.task_name, model: streams.model, allow_missing: true, on: 'pocolog')
+        def use_pocolog_task(streams, name: streams.task_name, model: streams.replay_model, allow_missing: true, on: 'pocolog')
 
             deployment_model = Deployment.new_submodel(task_name: name, task_model: model,
                                                        name: "Deployment::Pocolog::#{name}")

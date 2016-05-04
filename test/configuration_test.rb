@@ -11,26 +11,32 @@ module Syskit::Pocolog
             create_log_stream '/port0', double_t,
                 'rock_task_name' => "task",
                 'rock_task_object_name' => 'object0',
+                'rock_task_model' => 'task_model',
                 'rock_stream_type' => 'port'
             create_log_stream '/port1_1', double_t,
                 'rock_task_name' => "task",
                 'rock_task_object_name' => 'object1',
+                'rock_task_model' => 'task_model',
                 'rock_stream_type' => 'port'
             create_log_stream '/port1_2', double_t,
                 'rock_task_name' => "task",
                 'rock_task_object_name' => 'object1',
+                'rock_task_model' => 'task_model',
                 'rock_stream_type' => 'port'
             create_log_stream '/property0', double_t,
                 'rock_task_name' => "task",
                 'rock_task_object_name' => 'object0',
+                'rock_task_model' => 'task_model',
                 'rock_stream_type' => 'property'
             create_log_stream '/property1_1', double_t,
                 'rock_task_name' => "task",
                 'rock_task_object_name' => 'object1',
+                'rock_task_model' => 'task_model',
                 'rock_stream_type' => 'property'
             create_log_stream '/property1_2', double_t,
                 'rock_task_name' => "task",
                 'rock_task_object_name' => 'object1',
+                'rock_task_model' => 'task_model',
                 'rock_stream_type' => 'property'
             flush_log_file
             streams = Streams.from_dir(created_log_dir)
@@ -57,6 +63,13 @@ module Syskit::Pocolog
 
                 configured_deployment = subject.use_pocolog_task(streams, name: 'test', model: task_m, allow_missing: flag)
                 assert_equal mock, configured_deployment.model
+            end
+
+            # This really is a synthetic test
+            it "allows for the deployment of a stream task" do
+                task_m = Syskit::TaskContext.new_submodel(orogen_model_name: 'task_model')
+                Syskit.conf.use_pocolog_task(streams, name: 'test')
+                task = syskit_deploy(streams)
             end
         end
     end
