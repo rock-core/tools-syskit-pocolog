@@ -20,4 +20,4 @@ require "syskit/pocolog/replay_task_context"
 require "syskit/pocolog/execution_engine_extension"
 require "syskit/pocolog/replay_manager"
 
-
+require 'syskit/pocolog/shell_interface'
