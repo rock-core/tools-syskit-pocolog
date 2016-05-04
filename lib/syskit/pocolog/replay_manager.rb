@@ -74,7 +74,11 @@ module Syskit::Pocolog
                 _, @time = stream_aligner.step_back
             else
                 reset_replay_base_times
-                @time = nil
+                if stream_aligner.eof?
+                    @time = end_time
+                else
+                    @time = start_time
+                end
             end
             reset_replay_base_times
         end
@@ -96,7 +100,11 @@ module Syskit::Pocolog
             if stream_aligner.remove_streams(*removed_streams)
                 _, @time = stream_aligner.step_back
             else
-                @time = nil
+                if stream_aligner.eof?
+                    @time = end_time
+                else
+                    @time = start_time
+                end
             end
             reset_replay_base_times
         end
