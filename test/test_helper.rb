@@ -44,6 +44,9 @@ module Syskit::Pocolog
 
             registry = Typelib::Registry.new
 
+            begin path.sub_ext('.0.idx').unlink
+            rescue Errno::ENOENT
+            end
             @created_log_file = ::Pocolog::Logfiles.create(path.to_s, registry)
             return path.sub_ext(".0.log"), created_log_file
         end
