@@ -64,7 +64,12 @@ module Syskit::Pocolog
                     p_stream = streams.find_port_by_name(p.name)
                     if !p_stream
                         if allow_missing
-                            Syskit::Pocolog.warn "no log stream available for #{p}, ignored as allow_missing is true"
+                            ports = streams.each_port_stream.map { |name, _| name }
+                            if ports.empty?
+                                Syskit::Pocolog.warn "no log stream available for #{p}, ignored as allow_missing is true (there are no log streams for the underlying task)"
+                            else
+                                Syskit::Pocolog.warn "no log stream available for #{p}, ignored as allow_missing is true (known ports are #{ports.sort.join(", ")}"
+                            end
                         else
                             raise MissingStream, "no stream named #{p.name}"
                         end

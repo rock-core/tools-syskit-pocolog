@@ -149,6 +149,18 @@ module Syskit::Pocolog
                 end
             end
         end
+
+        describe "#each_port_stream" do
+            it "enumerates the streams that are a task's port" do
+                ports = subject.each_port_stream.
+                    map { |name, stream| [name, stream.name] }.to_set
+                expected = Set[
+                    ['object0', '/port0'],
+                    ['object1', '/port1_1'],
+                    ['object1', '/port1_2']]
+                assert_equal expected, ports
+            end
+        end
     end
 end
 
