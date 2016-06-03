@@ -72,7 +72,18 @@ module Syskit::Pocolog
         def add_file_group(group)
             file = Pocolog::Logfiles.new(*group.map { |path| path.open }, registry)
             file.streams.each do |s|
+                sanitize_metadata(s)
                 add_stream(s)
+            end
+        end
+
+        def sanitize_metadata(stream)
+            if (model = stream.metadata['rock_task_model']) && model.empty?
+                Syskit::Pocolog.warn "removing empty metadata property 'rock_task_model' from #{stream.name}"
+                stream.metadata.delete('rock_task_model')
+            end
+            if task_name = stream.metadata['rock_task_name']
+                stream.metadata['rock_task_name'] = task_name.gsub(/.*\//, '')
             end
         end
 
