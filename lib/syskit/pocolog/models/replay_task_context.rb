@@ -22,8 +22,14 @@ module Syskit
                     if model = find_model_by_orogen(orogen_model)
                         model
                     else
-                        define_from_orogen(orogen_model, register: false)
+                        define_from_orogen(orogen_model, register: true)
                     end
+                end
+
+                def register_syskit_model_from_orogen_name(model)
+                    orogen_model = model.orogen_model
+                    namespace, basename = syskit_names_from_orogen_name(orogen_model.name)
+                    register_syskit_model(OroGen::Pocolog, namespace, basename, model)
                 end
 
                 # @api private

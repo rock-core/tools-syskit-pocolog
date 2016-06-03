@@ -17,6 +17,12 @@ module Syskit::Pocolog
                     refute_nil replay_task_m
                     assert_same task_m.orogen_model, replay_task_m.orogen_model
                 end
+                it "sets the new model's name and registers it under OroGen::Pocolog" do
+                    task_m = Syskit::TaskContext.new_submodel(orogen_model_name: 'project::Task')
+                    replay_task_m = subject.model_for(task_m.orogen_model)
+                    assert_same ::OroGen::Pocolog::Project::Task, replay_task_m
+                    assert_equal "OroGen::Pocolog::Project::Task", replay_task_m.name
+                end
             end
             describe "#setup_submodel" do
                 attr_reader :task_m

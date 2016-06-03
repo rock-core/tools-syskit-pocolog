@@ -21,3 +21,5 @@ require "syskit/pocolog/execution_engine_extension"
 require "syskit/pocolog/replay_manager"
 
 require 'syskit/pocolog/shell_interface'
+
+require 'syskit/pocolog/registration_namespace'

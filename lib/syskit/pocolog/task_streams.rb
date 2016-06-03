@@ -27,7 +27,7 @@ module Syskit::Pocolog
             name = orogen_model_name
             if model = Syskit::TaskContext.find_model_from_orogen_name(name)
                 model
-            else raise Unknown, "cannot find a Syskit model for #{name}"
+            else raise Unknown, "cannot find a Syskit model for '#{name}'"
             end
         end
 
