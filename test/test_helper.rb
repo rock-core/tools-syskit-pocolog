@@ -6,6 +6,7 @@ require 'minitest/autorun'
 module Syskit::Pocolog
     module Test
         attr_reader :created_log_dir
+        attr_reader :all_log_files
         attr_reader :created_log_file
 
         def created_log_path
@@ -14,11 +15,16 @@ module Syskit::Pocolog
 
         def setup
             @pocolog_log_level = ::Pocolog.logger.level
+            @all_log_files = Array.new
             ::Pocolog.logger.level = Logger::WARN
             super
         end
 
         def teardown
+            all_log_files.each do |logfile|
+                logfile.close
+            end
+
             if @pocolog_log_level
                 ::Pocolog.logger.level = @pocolog_log_level
             end
@@ -48,12 +54,15 @@ module Syskit::Pocolog
             rescue Errno::ENOENT
             end
             @created_log_file = ::Pocolog::Logfiles.create(path.to_s, registry)
+            @all_log_files << created_log_file
             return path.sub_ext(".0.log"), created_log_file
         end
 
         # Write all pending changes done to {#created_log_file} on disk
         def flush_log_file
-            created_log_file.io.each(&:flush)
+            all_log_files.each do |logfile|
+                logfile.io.each(&:flush)
+            end
         end
 
         # Create a log stream on the last file created with

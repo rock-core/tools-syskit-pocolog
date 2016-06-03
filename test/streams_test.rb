@@ -32,6 +32,48 @@ module Syskit::Pocolog
             end
         end
 
+        describe "#add_file_group" do
+            it "adds the group's streams to self" do
+                test0_path, _ = create_log_file 'test0'
+                create_log_stream '/stream0', '/double'
+                create_log_stream '/stream1', '/double'
+                test1_path, _ = create_log_file 'test1'
+                create_log_stream '/stream0', '/double'
+                create_log_stream '/stream1', '/double'
+                create_log_stream '/stream2', '/double'
+                flush_log_file
+                flexmock(subject).should_receive(:add_stream).
+                    with(->(s) { s.name == '/stream0' }).once
+                flexmock(subject).should_receive(:add_stream).
+                    with(->(s) { s.name == '/stream1' }).once
+                flexmock(subject).should_receive(:add_stream).
+                    with(->(s) { s.name == '/stream2' }).once
+                subject.add_file_group([test0_path, test1_path])
+            end
+        end
+
+        describe "#add_stream" do
+            describe "sanitize metadata" do
+                it "removes an empty rock_task_model" do
+                    create_log_file 'test0'
+                    stream = create_log_stream '/stream0', '/double',
+                        'rock_task_model' => ''
+                    flexmock(Syskit::Pocolog).should_receive(:warn).
+                        with("removing empty metadata property 'rock_task_model' from /stream0").
+                        once
+                    subject.add_stream(stream)
+                    refute stream.metadata['rock_task_model']
+                end
+                it "removes the nameservice prefix" do
+                    create_log_file 'test0'
+                    stream = create_log_stream '/stream0', '/double',
+                        'rock_task_name' => 'localhost/task'
+                    subject.add_stream(stream)
+                    assert_equal 'task', stream.metadata['rock_task_name']
+                end
+            end
+        end
+
         describe "#add_dir" do
             it "raises ENOENT if the directory does not exist" do
                 assert_raises(Errno::ENOENT) { subject.add_dir(Pathname.new("does_not_exist")) }

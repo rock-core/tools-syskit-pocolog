@@ -125,7 +125,6 @@ module Syskit::Pocolog
         def add_file_group(group)
             file = Pocolog::Logfiles.new(*group.map { |path| path.open }, registry)
             file.streams.each do |s|
-                sanitize_metadata(s)
                 add_stream(s)
             end
         end
@@ -149,6 +148,7 @@ module Syskit::Pocolog
         #
         # @param [Pocolog::DataStream] s
         def add_stream(s)
+            sanitize_metadata(s)
             streams << s
         end
 
