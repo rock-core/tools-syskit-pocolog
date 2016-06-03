@@ -134,5 +134,69 @@ module Syskit::Pocolog
                 end
             end
         end
+
+        describe "#each_task" do
+            before do
+                logfile_path, _ = create_log_file 'test'
+                create_log_stream '/test0', '/double', 'rock_task_model' => 'project::Task', 'rock_task_name' => "task"
+                create_log_stream '/test1', '/double', 'rock_task_model' => 'project::Task', 'rock_task_name' => "task"
+                create_log_stream '/other_project', '/double', 'rock_task_model' => 'other_project::Task', 'rock_task_name' => 'other_task'
+                create_log_stream '/not_task_model', '/double', 'rock_task_name' => 'task_without_model'
+                flush_log_file
+                subject.add_dir(created_log_dir)
+            end
+
+            # Helper method to test whether the method issues some warning
+            # messages
+            def should_warn(matcher)
+                flexmock(Syskit::Pocolog).should_receive(:warn).with(matcher).once
+            end
+
+            it "ignores streams without a task model" do
+                task_m = Syskit::TaskContext.new_submodel orogen_model_name: 'project::Task'
+                other_task_m = Syskit::TaskContext.new_submodel orogen_model_name: 'other_project::Task'
+                assert_equal ['task', 'other_task'], subject.each_task.map(&:task_name)
+            end
+
+            it "does not attempt to load the model's project if the task model is known" do
+                Syskit::TaskContext.new_submodel orogen_model_name: 'project::Task'
+                Syskit::TaskContext.new_submodel orogen_model_name: 'other_project::Task'
+                flexmock(app).should_receive(:using_task_library).never
+                subject.each_task.to_a
+            end
+
+            it "ignores streams that have a malformed rock_task_model name" do
+                streams = Streams.new([s = subject.streams[0]])
+                s.metadata['rock_task_model'] = ''
+                should_warn /ignored 1 stream.*empty.*test0/
+                flexmock(app).should_receive(:using_task_library).never
+                assert_equal [], streams.each_task.to_a
+            end
+
+            it "does not attempt to load the model's project if load_models is false" do
+                flexmock(app).should_receive(:using_task_library).never
+                should_warn /ignored 2 streams.*project::Task.*\/test0, \/test1/
+                should_warn /ignored.*other_project::Task.*other_project/
+                assert_equal [], subject.each_task(load_models: false).to_a
+            end
+
+            it "attempts to load the model's project if load_models is true" do
+                flexmock(app).should_receive(:using_task_library).once.
+                    with('project').
+                    and_return { Syskit::TaskContext.new_submodel(orogen_model_name: 'project::Task') }
+                flexmock(app).should_receive(:using_task_library).once.
+                    with('other_project')
+                should_warn /ignored 1 stream.*other_project::Task.*other_project/
+                assert_equal ['task'], subject.each_task(load_models: true).map(&:task_name)
+            end
+
+            it "groups the streams per task name" do
+                task_m = Syskit::TaskContext.new_submodel orogen_model_name: 'project::Task'
+                other_task_m = Syskit::TaskContext.new_submodel orogen_model_name: 'other_project::Task'
+                task, other_task = subject.each_task.to_a
+                assert_equal ['/test0', '/test1'], task.streams.map(&:name)
+                assert_equal ['/other_project'], other_task.streams.map(&:name)
+            end
+        end
     end
 end
