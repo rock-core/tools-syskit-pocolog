@@ -34,7 +34,8 @@ module Syskit::Pocolog
             def setup_submodel(submodel, **options, &block)
                 super
                 orogen_model = submodel.each_orogen_deployed_task_context_model.first
-                submodel.instance_variable_set :@task_model, Syskit::Pocolog::ReplayTaskContext.model_for(orogen_model.task_model)
+                submodel.instance_variable_set :@task_model,
+                    Syskit::Pocolog::ReplayTaskContext.model_for(orogen_model.task_model)
                 submodel.instance_variable_set :@streams_to_port, Hash.new
             end
 
