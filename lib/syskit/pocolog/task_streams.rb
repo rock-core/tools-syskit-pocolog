@@ -5,18 +5,24 @@ module Syskit::Pocolog
     # It is returned from the main stream pool by
     # {Streams#find_task_by_name)
     class TaskStreams < Streams
+        def initialize(streams = Array.new, task_name: nil)
+            super(streams)
+            @task_name = task_name
+            @orogen_model_name = nil
+        end
+
         # Returns the task name for all streams in self
         #
         # @raise (see unique_metadata)
         def task_name
-            unique_metadata('rock_task_name')
+            @task_name ||= unique_metadata('rock_task_name')
         end
 
         # Returns the orogen model name for all streams in self
         #
         # @raise (see unique_metadata)
         def orogen_model_name
-            unique_metadata('rock_task_model')
+            @orogen_model_name ||= unique_metadata('rock_task_model')
         end
 
         # Returns the Syskit model for the orogen model name in
@@ -106,7 +112,9 @@ module Syskit::Pocolog
         end
 
         def to_instance_requirements
-            self.replay_model.to_instance_requirements.prefer_deployed_tasks(task_name)
+            requirements = self.replay_model.to_instance_requirements
+            requirements.use_deployment_group(to_deployment_group)
+            requirements
         end
 
         def as_plan

@@ -170,6 +170,15 @@ module Syskit::Pocolog
             MetaRuby::DSLs.find_through_method_missing(
                 self, m, args, 'task' => "find_task_by_name") || super
         end
+
+        # Creates a deployment group object that deploys all streams
+        def to_deployment_group(load_models: true, loader: Roby.app.default_loader, ignore_missing_task_models: true)
+            group = Syskit::Models::DeploymentGroup.new
+            each_task(load_models: load_models, loader: loader, ignore_missing_task_models: ignore_missing_task_models) do |task_streams|
+                group.use_pocolog_task(task_streams)
+            end
+            group
+        end
     end
 end
 

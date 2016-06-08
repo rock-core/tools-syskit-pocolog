@@ -1,10 +1,10 @@
 require 'test_helper'
 
 module Syskit::Pocolog
-    describe Configuration do
-        attr_reader :subject, :streams, :double_t
+    describe Extensions::Configuration do
+        attr_reader :group, :streams, :double_t
         before do
-            @subject = Syskit::RobyApp::Configuration.new(Roby.app)
+            @group = Syskit::Models::DeploymentGroup.new
             double_t = Roby.app.default_loader.registry.get '/double'
 
             create_log_file 'test'
@@ -44,12 +44,6 @@ module Syskit::Pocolog
         end
 
         describe "#use_pocolog_task" do
-            it "declares the 'pocolog' process server" do
-                task_m = Syskit::TaskContext.new_submodel
-                subject.use_pocolog_task(streams, name: 'test', model: task_m)
-                assert subject.has_process_server?('pocolog')
-            end
-
             it "registers the stream-to-port mappings for the matching ports on the deployment model" do
                 task_m = Syskit::TaskContext.new_submodel
                 deployment_m = Deployment.new_submodel(task_model: task_m, task_name: 'test')
@@ -61,15 +55,15 @@ module Syskit::Pocolog
                     with(streams, allow_missing: (flag = flexmock)).
                     once
 
-                configured_deployment = subject.use_pocolog_task(streams, name: 'test', model: task_m, allow_missing: flag)
+                configured_deployment = group.use_pocolog_task(streams, name: 'test', model: task_m, allow_missing: flag)
                 assert_equal mock, configured_deployment.model
             end
 
             # This really is a synthetic test
             it "allows for the deployment of a stream task" do
                 task_m = Syskit::TaskContext.new_submodel(orogen_model_name: 'task::Model')
-                Syskit.conf.use_pocolog_task(streams, name: 'test')
-                task = syskit_deploy(streams)
+                req = task_m.to_instance_requirements.use_deployment_group(streams)
+                syskit_deploy(req)
             end
         end
     end

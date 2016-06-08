@@ -6,9 +6,6 @@ module Syskit::Pocolog
         attr_reader :replay_manager, :streams, :port_stream, :task_m, :deployment_m
         attr_reader :subject
         before do
-            mng = Orocos::RubyTasks::ProcessManager.new(Roby.app.default_loader)
-            Syskit.conf.register_process_server('pocolog', mng)
-
             double_t = Roby.app.default_loader.registry.get '/double'
 
             create_log_file 'test'

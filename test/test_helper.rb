@@ -17,6 +17,7 @@ module Syskit::Pocolog
             @pocolog_log_level = ::Pocolog.logger.level
             @all_log_files = Array.new
             ::Pocolog.logger.level = Logger::WARN
+            app.register_app_extension('syskit-pocolog', Syskit::Pocolog::Plugin)
             super
         end
 

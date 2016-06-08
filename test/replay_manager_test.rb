@@ -132,9 +132,6 @@ module Syskit::Pocolog
 
         describe "#process_in_realtime" do
             before do
-                mng = Orocos::RubyTasks::ProcessManager.new(Roby.app.default_loader)
-                Syskit.conf.register_process_server('pocolog', mng)
-
                 double_t = Roby.app.default_loader.registry.get '/double'
 
                 create_log_file 'test'

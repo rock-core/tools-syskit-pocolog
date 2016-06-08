@@ -2,11 +2,10 @@ require 'test_helper'
 
 module Syskit::Pocolog
     describe ShellInterface do
-        attr_reader :app, :replay_manager, :subject
+        attr_reader :replay_manager, :subject
 
         before do
-            @replay_manager = plan.execution_engine.pocolog_replay_manager
-            @app = Roby::Application.new(plan: plan)
+            @replay_manager = app.plan.execution_engine.pocolog_replay_manager
             @subject = ShellInterface.new(app)
         end
 
