@@ -13,7 +13,7 @@ MetaRuby.keep_definition_location = false
 
 options = OptionParser.new do |opt|
     opt.banner = <<-EOD
-syskit pocolog [-r ROBOT] /path/to/dataset
+syskit pocolog [-r ROBOT] /path/to/dataset [script.rb]
     EOD
     Roby::Application.common_optparse_setup(opt)
 end
@@ -29,21 +29,27 @@ elsif remaining.size > 1
     exit 1
 end
 
-dataset_dir = Pathname.new(remaining.first)
-if !dataset_dir.exist?
-    Syskit::Pocolog.fatal "#{dataset_dir} does not exist"
-    exit 1
-elsif !dataset_dir.directory?
-    Syskit::Pocolog.fatal "#{dataset_dir} is not a directory"
+paths = remaining.map { |p| Pathname.new(p) }
+if non_existent = paths.find { |p| !p.exist? }
+    Syskit::Pocolog.fatal "#{non_existent} does not exist"
     exit 1
 end
 
+script_paths, dataset_paths = paths.partition { |p| p.extname == '.rb' }
 Roby.display_exception do
     app.setup
     begin
-        streams = Syskit::Pocolog::Streams.from_dir(dataset_dir.to_s)
-        streams.each_task(app: app) do |task_streams|
-            Syskit.conf.use_pocolog_task task_streams
+        streams = Syskit::Pocolog::Streams.new
+        dataset_paths.each do |p|
+            if p.directory?
+                streams.add_dir(p)
+            else
+                streams.add_file(p)
+            end
+        end
+
+        script_paths.each do |p|
+            require p.to_s
         end
     rescue Exception
         app.cleanup
