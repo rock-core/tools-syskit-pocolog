@@ -223,13 +223,14 @@ module Syskit::Pocolog
             end
 
             it "attempts to load the model's project if load_models is true" do
-                flexmock(app).should_receive(:using_task_library).once.
+                loader = flexmock
+                loader.should_receive(:project_model_from_name).once.
                     with('project').
                     and_return { Syskit::TaskContext.new_submodel(orogen_model_name: 'project::Task') }
-                flexmock(app).should_receive(:using_task_library).once.
+                loader.should_receive(:project_model_from_name).once.
                     with('other_project')
                 should_warn /ignored 1 stream.*other_project::Task.*other_project/
-                assert_equal ['task'], subject.each_task(load_models: true).map(&:task_name)
+                assert_equal ['task'], subject.each_task(load_models: true, loader: loader).map(&:task_name)
             end
 
             it "groups the streams per task name" do

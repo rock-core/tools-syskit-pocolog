@@ -40,8 +40,8 @@ module Syskit::Pocolog
         # @param [#using_task_library] app the app that should be used to
         #   load the missing models when load_models is true
         # @yieldparam [TaskStreams] task
-        def each_task(load_models: true, app: Roby.app)
-            return enum_for(__method__, load_models: load_models) if !block_given?
+        def each_task(load_models: true, ignore_missing_task_models: true, loader: Roby.app.default_loader)
+            return enum_for(__method__, load_models: load_models, ignore_missing_task_models: ignore_missing_task_models, loader: loader) if !block_given?
 
             available_tasks = Hash.new { |h, k| h[k] = Array.new }
             ignored_streams = Hash.new { |h, k| h[k] = Array.new }
@@ -57,8 +57,12 @@ module Syskit::Pocolog
                 task_m = Syskit::TaskContext.find_model_from_orogen_name(task_model_name)
                 if !task_m && load_models 
                     orogen_project_name, *_tail = task_model_name.split('::')
-                    app.using_task_library orogen_project_name
-                    task_m = Syskit::TaskContext.find_model_from_orogen_name(task_model_name)
+                    loader.project_model_from_name(orogen_project_name)
+                    begin
+                        task_m = Syskit::TaskContext.find_model_from_orogen_name(task_model_name)
+                    rescue NotFound
+                        raise if !ignore_missing_task_models
+                    end
                 end
                 if task_m
                     available_tasks[s.metadata['rock_task_name']] << s
