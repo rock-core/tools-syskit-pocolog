@@ -4,7 +4,7 @@ module Syskit::Pocolog
     # Deployments register and deregister themselves when started/stopped.
     #
     # There is one per execution engine, which is accessible via
-    # {ExecutionEngineExtension#pocolog_replay_manager}. The way to add/remove
+    # {Extensions::ExecutionEngine#pocolog_replay_manager}. The way to add/remove
     # deployment tasks is through {.register} and {.deregister}, which are
     # already automatically called on the deployment's start/stop events.
     class ReplayManager
