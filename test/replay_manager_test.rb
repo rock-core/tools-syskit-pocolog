@@ -22,8 +22,7 @@ module Syskit::Pocolog
             plan = Roby::ExecutablePlan.new
             @subject = ReplayManager.new(plan.execution_engine)
 
-            @deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
-            deployment_m.add_streams_from streams
+            @deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: task_m, name: 'task')
         end
 
         describe "#register" do
@@ -151,8 +150,7 @@ module Syskit::Pocolog
                     output_port 'out', double_t
                 end
 
-                deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
-                deployment_m.add_streams_from streams
+                deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: task_m, name: 'task')
                 plan.add_permanent_task(deployment = deployment_m.new(process_name: 'test', on: 'pocolog'))
                 deployment.start!
                 deployment.ready_event.emit

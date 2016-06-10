@@ -1,6 +1,6 @@
 module Syskit::Pocolog
     module Extensions
-        # Extension of the Syskit::DeploymentGroup class to add APIs related to
+        # Extension of the Syskit::Models::DeploymentGroup class to add APIs related to
         # replaying tasks
         module DeploymentGroup
             # Expose a given set of streams as a task context in Syskit
@@ -8,9 +8,8 @@ module Syskit::Pocolog
                 # Verify the process manager's availability
                 process_managers.process_server_config_for(on)
 
-                deployment_model = Deployment.new_submodel(task_name: name, task_model: model,
-                                                           name: "Deployment::Pocolog::#{name}")
-                deployment_model.add_streams_from(streams, allow_missing: allow_missing)
+                deployment_model = Deployment.for_streams(
+                    streams, name: name, model: model, allow_missing: allow_missing)
 
                 configured_deployment = Syskit::Models::ConfiguredDeployment.
                     new(on, deployment_model, Hash[name => name], name, Hash.new)

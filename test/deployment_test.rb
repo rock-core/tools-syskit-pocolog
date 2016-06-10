@@ -28,8 +28,7 @@ module Syskit::Pocolog
             end
             @replay_manager = execution_engine.pocolog_replay_manager
 
-            @deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
-            deployment_m.add_streams_from streams
+            @deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: task_m, name: 'task')
             plan.add_permanent_task(@subject = deployment_m.new(process_name: 'test', on: 'pocolog'))
         end
 
@@ -56,8 +55,7 @@ module Syskit::Pocolog
                 other_task_m = Syskit::TaskContext.new_submodel do
                     output_port 'other_out', '/double'
                 end
-                other_deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: other_task_m, task_name: 'task')
-                other_deployment_m.add_streams_from streams
+                other_deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: other_task_m, name: 'task')
                 @other_deployment = other_deployment_m.new(process_name: 'other_test', on: 'pocolog')
                 plan.add_permanent_task(other_deployment)
             end

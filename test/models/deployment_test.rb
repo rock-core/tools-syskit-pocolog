@@ -19,6 +19,12 @@ module Syskit::Pocolog
                 flush_log_file
                 @streams = Streams.from_dir(created_log_dir).
                     find_task_by_name('task')
+
+                Syskit::Pocolog.logger.level = Logger::FATAL
+            end
+
+            after do
+                Syskit::Pocolog.logger.level = Logger::WARN
             end
 
             describe "#add_stream" do
@@ -29,7 +35,7 @@ module Syskit::Pocolog
                             input_port 'in', '/double'
                             output_port 'out', '/double'
                         end
-                        @deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
+                        @deployment_m = Syskit::Pocolog::Deployment.for_streams(TaskStreams.new, model: task_m, name: 'task')
                     end
 
                     it "raises ArgumentError if the port is not a port of the deployment's task model" do
@@ -60,7 +66,7 @@ module Syskit::Pocolog
                         output_port 'object0', '/double'
                     end
                     replay_task_m = Syskit::Pocolog::ReplayTaskContext.model_for(task_m.orogen_model)
-                    deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_model: task_m, task_name: 'task')
+                    deployment_m = Syskit::Pocolog::Deployment.for_streams(TaskStreams.new, model: task_m, name: 'task')
                     deployment_m.add_stream(port_stream = streams.find_port_by_name('object0'))
                     assert_equal Hash[port_stream => replay_task_m.object0_port],
                         deployment_m.streams_to_port
@@ -72,7 +78,7 @@ module Syskit::Pocolog
                     task_m = Syskit::TaskContext.new_submodel do
                         output_port 'unknown_port', '/double'
                     end
-                    deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_name: 'test', task_model: task_m)
+                    deployment_m = Syskit::Pocolog::Deployment.for_streams(TaskStreams.new, name: 'test', model: task_m)
                     flexmock(Syskit::Pocolog, :strict).should_receive(:warn).with(/unknown_port/).once
                     deployment_m.add_streams_from(streams, allow_missing: true)
                 end
@@ -81,7 +87,7 @@ module Syskit::Pocolog
                     task_m = Syskit::TaskContext.new_submodel do
                         output_port 'unknown_port', '/double'
                     end
-                    deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_name: 'test', task_model: task_m)
+                    deployment_m = Syskit::Pocolog::Deployment.for_streams(TaskStreams.new, name: 'test', model: task_m)
                     assert_raises(MissingStream) do
                         deployment_m.add_streams_from(streams, allow_missing: false)
                     end
@@ -92,7 +98,7 @@ module Syskit::Pocolog
                         output_port 'object0', '/double'
                     end
                     replay_task_m = Syskit::Pocolog::ReplayTaskContext.model_for(task_m.orogen_model)
-                    deployment_m = Syskit::Pocolog::Deployment.new_submodel(task_name: 'test', task_model: task_m)
+                    deployment_m = Syskit::Pocolog::Deployment.for_streams(TaskStreams.new, name: 'test', model: task_m)
                     flexmock(deployment_m).should_receive(:add_stream).
                         with(streams.find_port_by_name('object0'), replay_task_m.object0_port).
                         once

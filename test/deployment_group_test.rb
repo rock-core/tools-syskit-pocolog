@@ -46,16 +46,13 @@ module Syskit::Pocolog
         describe "#use_pocolog_task" do
             it "registers the stream-to-port mappings for the matching ports on the deployment model" do
                 task_m = Syskit::TaskContext.new_submodel
-                deployment_m = Deployment.new_submodel(task_model: task_m, task_name: 'test')
+                deployment_m = Deployment.new_submodel
                 flexmock(Syskit::Pocolog::Deployment).
-                    should_receive(:new_submodel).
-                    with(->(h) { h[:task_model] = task_m && h[:task_name] == 'test' }).
+                    should_receive(:for_streams).
+                    with(streams, ->(h) { h[:model] == task_m && h[:name] == 'test' }).
                     and_return(mock = flexmock(deployment_m))
-                mock.should_receive(:add_streams_from).
-                    with(streams, allow_missing: (flag = flexmock)).
-                    once
 
-                configured_deployment = group.use_pocolog_task(streams, name: 'test', model: task_m, allow_missing: flag)
+                configured_deployment = group.use_pocolog_task(streams, name: 'test', model: task_m, allow_missing: true)
                 assert_equal mock, configured_deployment.model
             end
 

@@ -12,20 +12,25 @@ module Syskit::Pocolog
             # @see add_stream add_streams_from
             attr_reader :streams_to_port
 
+            # Define a deployment model that will manage the given streams
+            def for_streams(streams, name: streams.task_name, model: streams.replay_model, allow_missing: true)
+                deployment_model = new_submodel(name: "Deployment::Pocolog::#{name}") do
+                    task name, model.orogen_model
+                end
+                deployment_model.add_streams_from(streams, allow_missing: allow_missing)
+                deployment_model
+            end
+
             # Create a new deployment model
             #
             # Unlike the Syskit deployment models, this does not yield. The task
             # model is instead supposed to be given as the task_model argument.
             #
             # @param [String] task_name the task name
-            # @param [Syskit::Models::TaskContext] task_model the task model. It
-            #   is available on the generated model through {#task_model}
             # @param options the standard options given to super
             # @return [Syskit::Pocolog::Models::Deployment]
-            def new_submodel(task_name: nil, task_model: nil, **options)
-                super(**options) do
-                    task task_name, task_model.orogen_model
-                end
+            def new_submodel(**options, &block)
+                super(**options, &block)
             end
 
             # @api private
@@ -33,10 +38,11 @@ module Syskit::Pocolog
             # Callback called by metaruby in {#new_submodel}
             def setup_submodel(submodel, **options, &block)
                 super
-                orogen_model = submodel.each_orogen_deployed_task_context_model.first
-                submodel.instance_variable_set :@task_model,
-                    Syskit::Pocolog::ReplayTaskContext.model_for(orogen_model.task_model)
-                submodel.instance_variable_set :@streams_to_port, Hash.new
+                if orogen_model = submodel.each_orogen_deployed_task_context_model.first
+                    submodel.instance_variable_set :@task_model,
+                        Syskit::Pocolog::ReplayTaskContext.model_for(orogen_model.task_model)
+                    submodel.instance_variable_set :@streams_to_port, Hash.new
+                end
             end
 
             def each_deployed_task_model
