@@ -49,7 +49,7 @@ module Syskit::Pocolog
                 return enum_for(__method__) if !block_given?
 
                 super do |name, plain_task_model|
-                    yield name, Syskit::Pocolog::ReplayTaskContext.model_for(plain_task_model.orogen_model)
+                    yield name, Syskit::TaskContext.model_for(plain_task_model.orogen_model)
                 end
             end
 

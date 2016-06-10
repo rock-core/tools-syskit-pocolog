@@ -66,7 +66,14 @@ module Syskit
                 # Reimplemented to make ReplayTaskContext fullfills?
                 # {#plain_task_context}
                 def fullfills?(model)
-                    super || plain_task_context.fullfills?(model)
+                    self == model || super || plain_task_context.fullfills?(model)
+                end
+
+                def each_fullfilled_model
+                    return enum_for(__method__) if !block_given?
+
+                    super
+                    yield(plain_task_context)
                 end
             end
         end
