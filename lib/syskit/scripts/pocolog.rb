@@ -48,8 +48,13 @@ Roby.display_exception do
             end
         end
 
-        script_paths.each do |p|
-            require p.to_s
+        if script_paths.empty?
+            # Load the default script
+            Syskit::Pocolog::Plugin.override_all_deployments_by_replay_streams(streams)
+        else
+            script_paths.each do |p|
+                require p.to_s
+            end
         end
     rescue Exception
         app.cleanup
