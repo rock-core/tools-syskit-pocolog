@@ -219,7 +219,8 @@ module Syskit::Pocolog
         # @param [Pocolog::DataStream] stream the stream
         # @return [String] the registry's checksum
         def self.save_registry_in_normalized_dataset(stream_path, stream)
-            stream_tlb = stream_path.sub_ext('.tlb')
+            dir, basename = stream_path.split
+            stream_tlb = dir + "#{basename.basename('.log')}.tlb"
             if stream_tlb == stream_path
                 raise ArgumentError, "cannot save the stream registry in #{stream_tlb}, it would overwrite the stream itself"
             end
