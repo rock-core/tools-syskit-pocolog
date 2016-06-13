@@ -102,6 +102,12 @@ module Syskit::Pocolog
                     # Make generated files read-only
                     out_file_path.chmod 0o444
                     Pathname.new(out_file.default_index_filename).chmod 0o444
+
+                    Streams.update_normalized_metadata(output_path) do |metadata|
+                        registry_digest = Streams.save_registry_in_normalized_dataset(out_file_path, stream)
+                        metadata << Streams.create_metadata_entry(out_file_path, out_stream, registry_digest)
+                    end
+
                 rescue Interrupt
                     reporter.warn "interrupted, deleting #{out_file_path}"
                     out_file.close
