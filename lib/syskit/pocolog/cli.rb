@@ -56,6 +56,9 @@ module Syskit::Pocolog
         desc 'normalize', 'normalizes a data stream in a format that makes it easier and faster to use'
         method_option :out, desc: 'output directory (defaults to a normalized/ folder under the source folder)',
             default: 'normalized'
+        method_option :override, desc: 'whether existing files in the output directory should be overriden',
+            type: :boolean, default: false
+
         def normalize(path)
             path = Pathname.new(path).realpath
             output_path = Pathname.new(options['out']).expand_path(path)
@@ -70,9 +73,16 @@ module Syskit::Pocolog
             streams.each_stream do |stream|
                 task_name   = stream.metadata['rock_task_name'].gsub(/^\//, '')
                 object_name = stream.metadata['rock_task_object_name']
-                out_file_path = output_path + (task_name + "::" + object_name).gsub('/', ':')
-                out_file = Pocolog::Logfiles.create(out_file_path.to_s)
+                pocolog_out_file_path = output_path + (task_name + "::" + object_name).gsub('/', ':')
                 out_file_path = output_path + (task_name + "::" + object_name + ".0.log").gsub('/', ':')
+                if out_file_path.exist? && !out_file_path.writable?
+                    if !options['override']
+                        next
+                    end
+                    out_file_path.chmod 0o644
+                end
+
+                out_file = Pocolog::Logfiles.create(pocolog_out_file_path.to_s)
                 out_stream = out_file.create_stream(stream.name, stream.type, stream.metadata)
 
                 reporter.log "copying #{stream.name} into #{out_file_path}"
