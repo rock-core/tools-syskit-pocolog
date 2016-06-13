@@ -5,9 +5,11 @@ module Syskit::Pocolog
     extend Logger::Root('Syskit::Pocolog', Logger::WARN)
 end
 
+require 'digest/sha2'
 require "metaruby/dsls/find_through_method_missing"
 require "syskit/pocolog/version"
 require "syskit/pocolog/exceptions"
+require "syskit/pocolog/lazy_data_stream"
 require "syskit/pocolog/streams"
 require "syskit/pocolog/task_streams"
 require "syskit/pocolog/rock_stream_matcher"

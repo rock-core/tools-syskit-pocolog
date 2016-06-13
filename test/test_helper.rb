@@ -47,16 +47,14 @@ module Syskit::Pocolog
         #   file object
         def create_log_file(filename, *typenames)
             create_log_dir
-            path = created_log_dir + filename
-
             registry = Typelib::Registry.new
 
-            begin path.sub_ext('.0.idx').unlink
+            begin (created_log_dir + (filename + '.0.idx')).unlink
             rescue Errno::ENOENT
             end
-            @created_log_file = ::Pocolog::Logfiles.create(path.to_s, registry)
+            @created_log_file = ::Pocolog::Logfiles.create(created_log_dir + filename, registry)
             @all_log_files << created_log_file
-            return path.sub_ext(".0.log"), created_log_file
+            return (created_log_dir + (filename + ".0.log")), created_log_file
         end
 
         # Write all pending changes done to {#created_log_file} on disk
@@ -75,6 +73,18 @@ module Syskit::Pocolog
             else type = typename
             end
             created_log_file.create_stream name, type, metadata
+        end
+
+        # Create a stream in a normalized dataset
+        def create_normalized_stream(name, typename, metadata)
+            logfile_path, logfile = create_log_file name.gsub('/', ':').gsub(/^:/, '')
+            stream = create_log_stream(name, typename, metadata)
+            flush_log_file
+            registry_checksum = Streams.save_registry_in_normalized_dataset(logfile_path, stream)
+            Streams.update_normalized_metadata(created_log_dir) do |metadata|
+                metadata << Streams.create_metadata_entry(logfile_path, stream, registry_checksum)
+            end
+            return logfile_path, stream
         end
     end
 end

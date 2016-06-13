@@ -37,4 +37,15 @@ module Syskit::Pocolog
             end
         end
     end
+    
+    # Exception raised when trying to load from a normalized dataset, but the
+    # metadata mismatches
+    class InvalidNormalizedDataset < RuntimeError
+        # The dataset metadata that failed sanity checks
+        attr_reader :stream_entry
+
+        def initialize(stream_entry)
+            @stream_entry = stream_entry
+        end
+    end
 end
