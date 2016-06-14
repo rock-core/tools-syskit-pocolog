@@ -7,6 +7,7 @@ end
 
 require 'digest/sha2'
 require "metaruby/dsls/find_through_method_missing"
+require 'log_tools/cli/null_reporter'
 require "syskit/pocolog/version"
 require "syskit/pocolog/exceptions"
 require "syskit/pocolog/lazy_data_stream"

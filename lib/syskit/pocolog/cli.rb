@@ -3,7 +3,9 @@ require 'syskit'
 require 'roby/cli/base'
 
 require 'syskit/pocolog'
+require 'syskit/pocolog/normalize'
 require 'tty-progressbar'
+require 'log_tools/cli/null_reporter'
 require 'log_tools/cli/tty_reporter'
 
 module Syskit::Pocolog
@@ -76,49 +78,14 @@ module Syskit::Pocolog
             bytes_total = paths.inject(0) do |total, path|
                 total + path.size
             end
-            bytes_copied = 0
 
-            last_progress_report = Time.now
+            reporter = LogTools::CLI::TTYReporter.new(
+                "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
 
-            paths.each do |logfile_path|
-                out_streams = Array.new
-                reporter = LogTools::CLI::TTYReporter.new("|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: logfile_path.size)
-                logfile = Pocolog::Logfiles.new(logfile_path.open('r'))
-                start = Time.now
-                sample_count = 0
-                logfile.each_data_block do |stream_index|
-                    wio, _out_logfile = out_streams[stream_index]
-                    if !wio
-                        stream = logfile.streams[stream_index]
-                        pocolog_out_file_path = output_path + Streams.normalized_filename(stream)
-                        out_logfile = Pocolog::Logfiles.append(pocolog_out_file_path.to_s)
-                        if out_logfile.streams.empty?
-                            out_logfile.create_stream(stream.name, stream.type, stream.metadata)
-                        end
-                        wio = out_logfile.wio
-                        out_streams[stream_index] = [wio, out_logfile]
-                    end
-
-                    payload = logfile.read_block_payload
-                    Pocolog::Logfiles.write_block(
-                        wio, Pocolog::STREAM_BLOCK, 0, payload)
-                    sample_count += 1
-
-                    now = Time.now
-                    if (now - last_progress_report) > 0.1
-                        header  = logfile.block_info
-                        reporter.current = header.pos + bytes_copied
-                        last_progress_report = now
-                    end
-                end
-                out_streams.compact.each do |wio, out_logfile|
-                    out_logfile.flush
-                    out_logfile.write_index_file
-                    out_logfile.close
-                end
-                out_streams.clear
-                logfile.close
-                puts "#{sample_count} samples (%.2f) samples/s" % [sample_count / (Time.now - start)]
+            normalize_op = Normalize.new
+            begin
+                normalize_op.normalize(paths, output_path: output_path, reporter: reporter)
+            ensure reporter.finish
             end
         end
     end
