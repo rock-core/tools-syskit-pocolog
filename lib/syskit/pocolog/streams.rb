@@ -255,6 +255,16 @@ module Syskit::Pocolog
             entry
         end
 
+        # Returns the normalized basename for the given stream
+        #
+        # @param [Pocolog::DataStream] stream
+        # @return [String]
+        def self.normalized_filename(stream)
+            task_name   = stream.metadata['rock_task_name'].gsub(/^\//, '')
+            object_name = stream.metadata['rock_task_object_name']
+            (task_name + "::" + object_name).gsub('/', ':')
+        end
+
         # Open a list of pocolog files that belong as a group
         #
         # I.e. each file is part of the same general datastream

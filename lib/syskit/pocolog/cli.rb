@@ -63,65 +63,63 @@ module Syskit::Pocolog
             path = Pathname.new(path).realpath
             output_path = Pathname.new(options['out']).expand_path(path)
             output_path.mkpath
-            streams = Streams.from_dir(path)
 
-            total_sample_count = streams.each_stream.inject(0) { |c, s| c + s.size }
-            reporter = LogTools::CLI::TTYReporter.new("|:bar| :current/:total :eta", total: total_sample_count)
-
-            last_progress_report = Time.now
-            copied_stream_counter = 0
-            streams.each_stream do |stream|
-                task_name   = stream.metadata['rock_task_name'].gsub(/^\//, '')
-                object_name = stream.metadata['rock_task_object_name']
-                pocolog_out_file_path = output_path + (task_name + "::" + object_name).gsub('/', ':')
-                out_file_path = output_path + (task_name + "::" + object_name + ".0.log").gsub('/', ':')
-                if out_file_path.exist? && !out_file_path.writable?
-                    if !options['override']
-                        next
-                    end
-                    out_file_path.chmod 0o644
-                end
-
-                out_file = Pocolog::Logfiles.create(pocolog_out_file_path.to_s)
-                out_stream = out_file.create_stream(stream.name, stream.type, stream.metadata)
-
-                reporter.log "copying #{stream.name} into #{out_file_path}"
-                begin
-                    stream.copy_to(out_stream) do |counter|
-                        now = Time.now
-                        if (now - last_progress_report) > 0.1
-                            reporter.current = counter + copied_stream_counter
-                            last_progress_report = now
-                        end
-                        false
-                    end
-                    copied_stream_counter += stream.size
-                    out_file.flush
-                    out_file.write_index_file
-                    out_file.close
-                    # Make generated files read-only
-                    out_file_path.chmod 0o444
-                    Pathname.new(out_file.default_index_filename).chmod 0o444
-
-                    Streams.update_normalized_metadata(output_path) do |metadata|
-                        registry_digest = Streams.save_registry_in_normalized_dataset(out_file_path, stream)
-                        metadata << Streams.create_metadata_entry(out_file_path, out_stream, registry_digest)
-                    end
-
-                rescue Interrupt
-                    reporter.warn "interrupted, deleting #{out_file_path}"
-                    out_file.close
-                    out_file_path.unlink
-                    raise
-                rescue Exception
-                    reporter.error "failed to copy #{out_file_path}, deleting"
-                    out_file.close
-                    out_file_path.unlink
-                    raise
+            paths = Array.new
+            Pathname.glob(path + '*.log') do |path|
+                basename = path.basename
+                if basename.to_s =~ /(.*)\.(\d+)\.log$/
+                    paths << [$1, Integer($2), path]
                 end
             end
-        ensure
-            reporter.finish if reporter
+            paths = paths.sort.map { |_, _, path| path }
+
+            bytes_total = paths.inject(0) do |total, path|
+                total + path.size
+            end
+            bytes_copied = 0
+
+            last_progress_report = Time.now
+
+            paths.each do |logfile_path|
+                out_streams = Array.new
+                reporter = LogTools::CLI::TTYReporter.new("|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: logfile_path.size)
+                logfile = Pocolog::Logfiles.new(logfile_path.open('r'))
+                start = Time.now
+                sample_count = 0
+                logfile.each_data_block do |stream_index|
+                    wio, _out_logfile = out_streams[stream_index]
+                    if !wio
+                        stream = logfile.streams[stream_index]
+                        pocolog_out_file_path = output_path + Streams.normalized_filename(stream)
+                        out_logfile = Pocolog::Logfiles.append(pocolog_out_file_path.to_s)
+                        if out_logfile.streams.empty?
+                            out_logfile.create_stream(stream.name, stream.type, stream.metadata)
+                        end
+                        wio = out_logfile.wio
+                        out_streams[stream_index] = [wio, out_logfile]
+                    end
+
+                    payload = logfile.read_block_payload
+                    Pocolog::Logfiles.write_block(
+                        wio, Pocolog::STREAM_BLOCK, 0, payload)
+                    sample_count += 1
+
+                    now = Time.now
+                    if (now - last_progress_report) > 0.1
+                        header  = logfile.block_info
+                        reporter.current = header.pos + bytes_copied
+                        last_progress_report = now
+                    end
+                end
+                out_streams.compact.each do |wio, out_logfile|
+                    out_logfile.flush
+                    out_logfile.write_index_file
+                    out_logfile.close
+                end
+                out_streams.clear
+                logfile.close
+                puts "#{sample_count} samples (%.2f) samples/s" % [sample_count / (Time.now - start)]
+            end
         end
     end
 end
