@@ -5,8 +5,8 @@ require 'roby/cli/base'
 require 'syskit/pocolog'
 require 'syskit/pocolog/normalize'
 require 'tty-progressbar'
-require 'log_tools/cli/null_reporter'
-require 'log_tools/cli/tty_reporter'
+require 'pocolog/cli/null_reporter'
+require 'pocolog/cli/tty_reporter'
 
 module Syskit::Pocolog
     class CLI < Roby::CLI::Base
@@ -20,13 +20,12 @@ module Syskit::Pocolog
 
         desc 'replay', 'replays a data replay script. If no script is given, allows to replay streams using profile definitions'
         def replay(*path)
-            setup_roby_for_running
-
             paths = path.map { |p| Pathname.new(p) }
             if non_existent = paths.find { |p| !p.exist? }
                 raise ArgumentError, "#{non_existent} does not exist"
             end
 
+            setup_roby_for_running
             script_paths, dataset_paths = paths.partition { |p| p.extname == '.rb' }
 
             app.setup
@@ -55,7 +54,7 @@ module Syskit::Pocolog
             app.run
         end
 
-        desc 'normalize', 'normalizes a data stream in a format that makes it easier and faster to use'
+        desc 'normalize', 'normalizes a data stream into a format that is suitable for the other log management commands to work'
         method_option :out, desc: 'output directory (defaults to a normalized/ folder under the source folder)',
             default: 'normalized'
         method_option :override, desc: 'whether existing files in the output directory should be overriden',
@@ -79,7 +78,7 @@ module Syskit::Pocolog
                 total + path.size
             end
 
-            reporter = LogTools::CLI::TTYReporter.new(
+            reporter = Pocolog::CLI::TTYReporter.new(
                 "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
 
             normalize_op = Normalize.new
