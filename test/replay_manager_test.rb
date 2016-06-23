@@ -6,13 +6,13 @@ module Syskit::Pocolog
         before do
             double_t = Roby.app.default_loader.registry.get '/double'
 
-            create_log_file 'test'
-            create_log_stream '/port0', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'out',
-                'rock_stream_type' => 'port'
-            flush_log_file
-            @streams = Streams.from_dir(created_log_dir).
+            create_logfile 'test.0.log' do
+                create_logfile_stream '/port0', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'out',
+                                   'rock_stream_type' => 'port']
+            end
+            @streams = Streams.from_dir(logfile_pathname).
                 find_task_by_name('task')
             @port_stream = streams.find_port_by_name('out')
             @task_m = Syskit::TaskContext.new_submodel do
@@ -133,17 +133,17 @@ module Syskit::Pocolog
             before do
                 double_t = Roby.app.default_loader.registry.get '/double'
 
-                create_log_file 'test'
-                stream0 = create_log_stream '/port0', double_t,
-                    'rock_task_name' => "task",
-                    'rock_task_object_name' => 'out',
-                    'rock_stream_type' => 'port'
-                stream0.write Time.at(0), Time.at(0), 0
-                stream0.write Time.at(0), Time.at(1), 1
-                stream0.write Time.at(0), Time.at(2), 2
-                flush_log_file
+                create_logfile 'test.0.log' do
+                    stream0 = create_logfile_stream '/port0', type: double_t,
+                        metadata: Hash['rock_task_name' => "task",
+                                       'rock_task_object_name' => 'out',
+                                       'rock_stream_type' => 'port']
+                    stream0.write Time.at(0), Time.at(0), 0
+                    stream0.write Time.at(0), Time.at(1), 1
+                    stream0.write Time.at(0), Time.at(2), 2
+                end
 
-                streams = Streams.from_dir(created_log_dir).
+                streams = Streams.from_dir(logfile_pathname).
                     find_task_by_name('task')
                 port_stream = streams.find_port_by_name('out')
                 task_m = Syskit::TaskContext.new_submodel do

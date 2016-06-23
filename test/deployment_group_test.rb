@@ -7,39 +7,39 @@ module Syskit::Pocolog
             @group = Syskit::Models::DeploymentGroup.new
             double_t = Roby.app.default_loader.registry.get '/double'
 
-            create_log_file 'test'
-            create_log_stream '/port0', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object0',
-                'rock_task_model' => 'task::Model',
-                'rock_stream_type' => 'port'
-            create_log_stream '/port1_1', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_task_model' => 'task::Model',
-                'rock_stream_type' => 'port'
-            create_log_stream '/port1_2', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_task_model' => 'task::Model',
-                'rock_stream_type' => 'port'
-            create_log_stream '/property0', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object0',
-                'rock_task_model' => 'task::Model',
-                'rock_stream_type' => 'property'
-            create_log_stream '/property1_1', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_task_model' => 'task::Model',
-                'rock_stream_type' => 'property'
-            create_log_stream '/property1_2', double_t,
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_task_model' => 'task::Model',
-                'rock_stream_type' => 'property'
-            flush_log_file
-            streams = Streams.from_dir(created_log_dir)
+            create_logfile 'test.0.log' do
+                create_logfile_stream '/port0', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object0',
+                                   'rock_task_model' => 'task::Model',
+                                   'rock_stream_type' => 'port']
+                create_logfile_stream '/port1_1', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_task_model' => 'task::Model',
+                                   'rock_stream_type' => 'port']
+                create_logfile_stream '/port1_2', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_task_model' => 'task::Model',
+                                   'rock_stream_type' => 'port']
+                create_logfile_stream '/property0', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object0',
+                                   'rock_task_model' => 'task::Model',
+                                   'rock_stream_type' => 'property']
+                create_logfile_stream '/property1_1', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_task_model' => 'task::Model',
+                                   'rock_stream_type' => 'property']
+                create_logfile_stream '/property1_2', type: double_t,
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_task_model' => 'task::Model',
+                                   'rock_stream_type' => 'property']
+            end
+            streams = Streams.from_dir(logfile_path)
             @streams = streams.find_task_by_name('task')
         end
 

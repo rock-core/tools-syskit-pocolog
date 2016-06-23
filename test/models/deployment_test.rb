@@ -6,18 +6,19 @@ module Syskit::Pocolog
             attr_reader :streams
             before do
                 double_t = Roby.app.default_loader.registry.get '/double'
+                mismatch_t = Typelib::Registry.new.create_numeric '/double', 4, :sint
 
-                create_log_file 'test'
-                create_log_stream '/port0', double_t,
-                    'rock_task_name' => "task",
-                    'rock_task_object_name' => 'object0',
-                    'rock_stream_type' => 'port'
-                create_log_stream '/port1', '/double',
-                    'rock_task_name' => "task_with_mismatching_type",
-                    'rock_task_object_name' => 'port_with_mismatching_type',
-                    'rock_stream_type' => 'port'
-                flush_log_file
-                @streams = Streams.from_dir(created_log_dir).
+                create_logfile 'test.0.log' do
+                    create_logfile_stream '/port0', type: double_t,
+                        metadata: Hash['rock_task_name' => "task",
+                                       'rock_task_object_name' => 'object0',
+                                       'rock_stream_type' => 'port']
+                    create_logfile_stream '/port1', type: mismatch_t,
+                        metadata: Hash['rock_task_name' => "task_with_mismatching_type",
+                                       'rock_task_object_name' => 'port_with_mismatching_type',
+                                       'rock_stream_type' => 'port']
+                end
+                @streams = Streams.from_dir(logfile_path).
                     find_task_by_name('task')
 
                 Syskit::Pocolog.logger.level = Logger::FATAL
@@ -47,7 +48,7 @@ module Syskit::Pocolog
                         end
                     end
                     it "raises MismatchingType if the stream and port have different types" do
-                        streams = Streams.from_dir(created_log_dir).
+                        streams = Streams.from_dir(logfile_path).
                             find_task_by_name('task_with_mismatching_type')
                         replay_task_m = Syskit::Pocolog::ReplayTaskContext.model_for(task_m.orogen_model)
                         assert_raises(MismatchingType) do

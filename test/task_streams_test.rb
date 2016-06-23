@@ -4,33 +4,33 @@ module Syskit::Pocolog
     describe TaskStreams do
         attr_reader :subject
         before do
-            create_log_file 'test'
-            create_log_stream '/port0', '/double',
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object0',
-                'rock_stream_type' => 'port'
-            create_log_stream '/port1_1', '/double',
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_stream_type' => 'port'
-            create_log_stream '/port1_2', '/double',
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_stream_type' => 'port'
-            create_log_stream '/property0', '/double',
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object0',
-                'rock_stream_type' => 'property'
-            create_log_stream '/property1_1', '/double',
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_stream_type' => 'property'
-            create_log_stream '/property1_2', '/double',
-                'rock_task_name' => "task",
-                'rock_task_object_name' => 'object1',
-                'rock_stream_type' => 'property'
-            flush_log_file
-            streams = Streams.from_dir(created_log_dir)
+            create_logfile 'test.0.log' do
+                create_logfile_stream '/port0',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object0',
+                                   'rock_stream_type' => 'port']
+                create_logfile_stream '/port1_1',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_stream_type' => 'port']
+                create_logfile_stream '/port1_2',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_stream_type' => 'port']
+                create_logfile_stream '/property0',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object0',
+                                   'rock_stream_type' => 'property']
+                create_logfile_stream '/property1_1',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_stream_type' => 'property']
+                create_logfile_stream '/property1_2',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object1',
+                                   'rock_stream_type' => 'property']
+            end
+            streams = Streams.from_dir(logfile_pathname)
             @subject = streams.find_task_by_name('task')
         end
 

@@ -4,16 +4,17 @@ module Syskit::Pocolog
     describe RockStreamMatcher do
         attr_reader :streams
         before do
-            path, _ = create_log_file 'test'
-            create_log_stream 'task.port', '/double', rock_stream_type: 'port', rock_task_object_name: 'port', rock_task_name: 'task'
-            create_log_stream 'task.property', '/int', rock_stream_type: 'property', rock_task_object_name: 'property', rock_task_name: 'task'
-            create_log_stream 'stream_without_properties', '/int'
-            create_log_stream 'other_task.port', '/int', rock_task_name: 'other_task'
-            create_log_stream 'stream_with_task_model', '/int', rock_task_model: 'orogen_model::Test'
-            flush_log_file
+            double_t = Typelib::Registry.new.create_numeric '/double', 8, :float
+            create_logfile 'test.0.log' do
+                create_logfile_stream 'task.port', type: double_t, metadata: Hash[rock_stream_type: 'port', rock_task_object_name: 'port', rock_task_name: 'task']
+                create_logfile_stream 'task.property', metadata: Hash[rock_stream_type: 'property', rock_task_object_name: 'property', rock_task_name: 'task']
+                create_logfile_stream 'stream_without_properties'
+                create_logfile_stream 'other_task.port', metadata: Hash[rock_task_name: 'other_task']
+                create_logfile_stream 'stream_with_task_model', metadata: Hash[rock_task_model: 'orogen_model::Test']
+            end
 
             @streams = Streams.new
-            streams.add_file path
+            streams.add_file logfile_pathname('test.0.log')
         end
         subject { RockStreamMatcher.new }
 

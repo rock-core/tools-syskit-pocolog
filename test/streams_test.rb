@@ -6,10 +6,10 @@ module Syskit::Pocolog
 
         describe "#add_file" do
             it "adds the file's streams to the object" do
-                logfile_path, logfile = create_log_file 'test'
-                create_log_stream '/task.file', '/double'
-                flush_log_file
-                subject.add_file(logfile_path)
+                create_logfile 'test.0.log' do
+                    create_logfile_stream '/task.file'
+                end
+                subject.add_file(logfile_pathname('test.0.log'))
                 assert_equal ['/task.file'], subject.each_stream.map(&:name)
             end
 
@@ -34,40 +34,45 @@ module Syskit::Pocolog
 
         describe "#add_file_group" do
             it "adds the group's streams to self" do
-                test0_path, _ = create_log_file 'test0'
-                create_log_stream '/stream0', '/double'
-                create_log_stream '/stream1', '/double'
-                test1_path, _ = create_log_file 'test1'
-                create_log_stream '/stream0', '/double'
-                create_log_stream '/stream1', '/double'
-                create_log_stream '/stream2', '/double'
-                flush_log_file
+                create_logfile 'test0.0.log' do
+                    create_logfile_stream '/stream0'
+                    create_logfile_stream '/stream1'
+                end
+                create_logfile 'test1.0.log' do
+                    create_logfile_stream '/stream0'
+                    create_logfile_stream '/stream1'
+                    create_logfile_stream '/stream2'
+                end
                 flexmock(subject).should_receive(:add_stream).
                     with(->(s) { s.name == '/stream0' }).once
                 flexmock(subject).should_receive(:add_stream).
                     with(->(s) { s.name == '/stream1' }).once
                 flexmock(subject).should_receive(:add_stream).
                     with(->(s) { s.name == '/stream2' }).once
-                subject.add_file_group([test0_path, test1_path])
+                subject.add_file_group([logfile_pathname('test0.0.log'), logfile_pathname('test1.0.log')])
             end
         end
 
         describe "#add_stream" do
             describe "sanitize metadata" do
                 it "removes an empty rock_task_model" do
-                    create_log_file 'test0'
-                    stream = create_log_stream '/stream0', '/double',
-                        'rock_task_model' => ''
+                    create_logfile 'test.0.log' do
+                        create_logfile_stream '/stream0',
+                            metadata: Hash['rock_task_model' => '']
+                    end
                     flexmock(Syskit::Pocolog).should_receive(:warn).
                         with("removing empty metadata property 'rock_task_model' from /stream0").
                         once
+                    stream = open_logfile_stream('test.0.log', '/stream0')
                     subject.add_stream(stream)
                     refute stream.metadata['rock_task_model']
                 end
                 it "removes the nameservice prefix" do
-                    create_log_file 'test0'
-                    stream = create_log_stream '/stream0', '/double',
-                        'rock_task_name' => 'localhost/task'
+                    create_logfile 'test0.0.log' do
+                        create_logfile_stream '/stream0',
+                            metadata: Hash['rock_task_name' => 'localhost/task']
+                    end
+                    stream = open_logfile_stream('test0.0.log', '/stream0')
                     subject.add_stream(stream)
                     assert_equal 'task', stream.metadata['rock_task_name']
                 end
@@ -79,46 +84,45 @@ module Syskit::Pocolog
                 assert_raises(Errno::ENOENT) { subject.add_dir(Pathname.new("does_not_exist")) }
             end
             it "ignores the files that do not match the .NUM.log pattern" do
-                create_log_dir
-                FileUtils.touch((created_log_dir + "a.file").to_s)
+                FileUtils.touch((logfile_pathname + "a.file").to_s)
                 flexmock(subject).should_receive(:add_file_group).never
-                subject.add_dir(created_log_dir)
+                subject.add_dir(logfile_pathname)
             end
             it "adds files that match the .NUM.log pattern" do
-                create_log_file 'test0'
-                create_log_file 'test1'
-                create_log_file 'test2'
+                create_logfile('test0.0.log') {}
+                create_logfile('test1.0.log') {}
+                create_logfile('test2.0.log') {}
                 flexmock(subject).should_receive(:add_file_group).
-                    with([created_log_dir + 'test0.0.log']).once
+                    with([logfile_pathname + 'test0.0.log']).once
                 flexmock(subject).should_receive(:add_file_group).
-                    with([created_log_dir + 'test1.0.log']).once
+                    with([logfile_pathname + 'test1.0.log']).once
                 flexmock(subject).should_receive(:add_file_group).
-                    with([created_log_dir + 'test2.0.log']).once
-                subject.add_dir(created_log_dir)
+                    with([logfile_pathname + 'test2.0.log']).once
+                subject.add_dir(logfile_pathname)
             end
 
             it "opens files that belong together, together" do
-                _, file = create_log_file 'test0'
-                file.new_file
-                create_log_file 'test1'
+                create_logfile('test0.0.log') {}
+                create_logfile('test0.1.log') {}
+                create_logfile('test1.0.log') {}
                 flexmock(subject).should_receive(:add_file_group).
-                    with([created_log_dir + 'test0.0.log', created_log_dir + "test0.1.log"]).once
+                    with([logfile_pathname + 'test0.0.log', logfile_pathname + "test0.1.log"]).once
                 flexmock(subject).should_receive(:add_file_group).
-                    with([created_log_dir + 'test1.0.log']).once
-                subject.add_dir(created_log_dir)
+                    with([logfile_pathname + 'test1.0.log']).once
+                subject.add_dir(logfile_pathname)
             end
         end
 
         describe "#make_file_groups_in_dir" do
             it "groups files that have the same basename together" do
-                _, file = create_log_file 'test0'
-                file.new_file
-                file.new_file
-                create_log_file 'test1'
-                groups = subject.make_file_groups_in_dir(created_log_dir)
+                create_logfile('test0.0.log') {}
+                create_logfile('test0.1.log') {}
+                create_logfile('test0.2.log') {}
+                create_logfile('test1.0.log') {}
+                groups = subject.make_file_groups_in_dir(logfile_pathname)
                 expected = [
-                    [(created_log_dir + 'test0.0.log'), (created_log_dir + 'test0.1.log'), (created_log_dir + 'test0.2.log')],
-                    [created_log_dir + 'test1.0.log']
+                    [(logfile_pathname + 'test0.0.log'), (logfile_pathname + 'test0.1.log'), (logfile_pathname + 'test0.2.log')],
+                    [logfile_pathname + 'test1.0.log']
                 ]
                 assert_equal expected, groups
             end
@@ -126,12 +130,12 @@ module Syskit::Pocolog
 
         describe "#find_all_streams" do
             it "returns the streams that match the object" do
-                logfile_path, _ = create_log_file 'test'
-                create_log_stream '/task.file', '/double'
-                create_log_stream '/other.task.file', '/double'
-                create_log_stream '/does.not.match', '/double'
-                flush_log_file
-                subject.add_dir(created_log_dir)
+                create_logfile 'test.0.log' do
+                    create_logfile_stream '/task.file'
+                    create_logfile_stream '/other.task.file'
+                    create_logfile_stream '/does.not.match'
+                end
+                subject.add_dir(logfile_pathname)
 
                 streams = subject.streams
 
@@ -145,12 +149,12 @@ module Syskit::Pocolog
 
         describe "#find_task_by_name" do
             before do
-                logfile_path, _ = create_log_file 'test'
-                create_log_stream '/test0', '/double', 'rock_task_name' => "task"
-                create_log_stream '/test1', '/double', 'rock_task_name' => "task"
-                create_log_stream '/does.not.match', '/double', 'rock_task_name' => 'another_task'
-                flush_log_file
-                subject.add_dir(created_log_dir)
+                create_logfile 'test.0.log' do
+                    create_logfile_stream '/test0', metadata: Hash['rock_task_name' => "task"]
+                    create_logfile_stream '/test1', metadata: Hash['rock_task_name' => "task"]
+                    create_logfile_stream '/does.not.match', metadata: Hash['rock_task_name' => 'another_task']
+                end
+                subject.add_dir(logfile_pathname)
             end
 
             it "returns nil if there are no matching tasks" do
@@ -179,13 +183,13 @@ module Syskit::Pocolog
 
         describe "#each_task" do
             before do
-                logfile_path, _ = create_log_file 'test'
-                create_log_stream '/test0', '/double', 'rock_task_model' => 'project::Task', 'rock_task_name' => "task"
-                create_log_stream '/test1', '/double', 'rock_task_model' => 'project::Task', 'rock_task_name' => "task"
-                create_log_stream '/other_project', '/double', 'rock_task_model' => 'other_project::Task', 'rock_task_name' => 'other_task'
-                create_log_stream '/not_task_model', '/double', 'rock_task_name' => 'task_without_model'
-                flush_log_file
-                subject.add_dir(created_log_dir)
+                create_logfile 'test.0.log' do
+                    create_logfile_stream '/test0', metadata: Hash['rock_task_model' => 'project::Task', 'rock_task_name' => "task"]
+                    create_logfile_stream '/test1', metadata: Hash['rock_task_model' => 'project::Task', 'rock_task_name' => "task"]
+                    create_logfile_stream '/other_project', metadata: Hash['rock_task_model' => 'other_project::Task', 'rock_task_name' => 'other_task']
+                    create_logfile_stream '/not_task_model', metadata: Hash['rock_task_name' => 'task_without_model']
+                end
+                subject.add_dir(logfile_pathname)
             end
 
             # Helper method to test whether the method issues some warning
@@ -243,52 +247,52 @@ module Syskit::Pocolog
         end
 
         describe "handling of normalized datasets" do
-            attr_reader :logfile_path
+            attr_reader :file_path
             before do
-                @logfile_path, _stream = create_normalized_stream(
-                    '/task.file', '/double',
-                    'rock_task_name' => "task",
-                    'rock_task_object_name' => 'object0',
-                    'rock_stream_type' => 'port')
+                @file_path, _stream = create_normalized_stream(
+                    '/task.file',
+                    metadata: Hash['rock_task_name' => "task",
+                                   'rock_task_object_name' => 'object0',
+                                   'rock_stream_type' => 'port'])
             end
 
             it "loads the directory's metadata" do
-                streams = Streams.from_dir(created_log_dir)
+                streams = Streams.from_dir(logfile_pathname)
                 assert_equal 1, streams.num_streams
 
                 datastream = streams.each_stream.first
                 assert_equal '/task.file', datastream.name
-                assert_equal '/double', datastream.type.name
+                assert_equal '/int32_t', datastream.type.name
                 assert_equal 0, datastream.size
-                assert_equal logfile_path, datastream.path
+                assert_equal file_path, datastream.path
                 assert_equal Hash['rock_task_name' => "task",
                     'rock_task_object_name' => 'object0',
                     'rock_stream_type' => 'port'], datastream.metadata
             end
             it "raises InvalidNormalizedDataset if a stream's file does not exist" do
-                logfile_path.unlink
+                file_path.unlink
                 assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(created_log_dir)
+                    Streams.from_dir(logfile_pathname)
                 end
             end
             it "raises InvalidNormalizedDataset if a stream's registry file does not exist" do
-                (created_log_dir + "task.file.0.tlb").unlink
+                (logfile_pathname + "task.file.0.tlb").unlink
                 assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(created_log_dir)
+                    Streams.from_dir(logfile_pathname)
                 end
             end
             it "raises InvalidNormalizedDataset if a stream's file modification time changed" do
                 # Needed, timestamps are often not sub-ms
                 sleep 0.01
-                FileUtils.touch (created_log_dir + "task.file.0.log")
+                FileUtils.touch (logfile_pathname + "task.file.0.log")
                 assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(created_log_dir)
+                    Streams.from_dir(logfile_pathname)
                 end
             end
             it "raises InvalidNormalizedDataset if a stream's file size changed" do
-                logfile_path.truncate(20)
+                file_path.truncate(20)
                 assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(created_log_dir)
+                    Streams.from_dir(logfile_pathname)
                 end
             end
         end
