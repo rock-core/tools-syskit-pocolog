@@ -65,25 +65,15 @@ module Syskit::Pocolog
             output_path = Pathname.new(options['out']).expand_path(path)
             output_path.mkpath
 
-            paths = Array.new
-            Pathname.glob(path + '*.log') do |path|
-                basename = path.basename
-                if basename.to_s =~ /(.*)\.(\d+)\.log$/
-                    paths << [$1, Integer($2), path]
-                end
-            end
-            paths = paths.sort.map { |_, _, path| path }
-
+            paths = Syskit::Pocolog.logfiles_in_dir(path)
             bytes_total = paths.inject(0) do |total, path|
                 total + path.size
             end
 
             reporter = Pocolog::CLI::TTYReporter.new(
                 "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
-
-            normalize_op = Normalize.new
             begin
-                normalize_op.normalize(paths, output_path: output_path, reporter: reporter)
+                Syskit::Pocolog.normalize(paths, output_path: output_path, reporter: reporter)
             ensure reporter.finish
             end
         end
