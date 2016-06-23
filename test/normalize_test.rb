@@ -28,6 +28,14 @@ module Syskit::Pocolog
                 stream = open_logfile_stream (normalized_dir + "task1::port.0.log"), 'stream1'
                 assert_equal [[base_time + 1, base_time + 10, 1]], stream.samples.to_a
             end
+            it "optionally computes the sha256 digest of the generated file, without the prologue" do
+                logfile_pathname('normalized').mkdir
+                result = normalize.normalize([logfile_pathname('file0.0.log')], compute_sha256: true)
+
+                path = logfile_pathname('normalized', 'task0::port.0.log')
+                expected = Digest::SHA256.hexdigest(path.read[Pocolog::Format::Current::PROLOGUE_SIZE..-1])
+                assert_equal expected, result[path].hexdigest
+            end
             it "generates valid index files for the normalized streams" do
                 logfile_pathname('normalized').mkdir
                 normalize.normalize([logfile_pathname('file0.0.log')])
