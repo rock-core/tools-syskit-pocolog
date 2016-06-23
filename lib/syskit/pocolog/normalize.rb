@@ -113,8 +113,16 @@ module Syskit::Pocolog
             last_progress_report = Time.now
             zero_index = [0].pack('v')
 
-            in_block_stream = Pocolog::BlockStream.new(logfile_path.open)
-            in_block_stream.read_prologue
+            in_io = logfile_path.open
+            in_block_stream = Pocolog::BlockStream.new(in_io)
+            begin
+                in_block_stream.read_prologue
+            rescue Pocolog::InvalidFile
+                reporter.warn "#{logfile_path.basename} does not seem to be a valid pocolog file, skipping"
+                reporter.current = in_io.size + reporter_offset
+                return nil, Array.new
+            end
+            
             control_blocks = String.new
             followup_stream_time = Array.new
             in_streams = Array.new
@@ -171,6 +179,11 @@ module Syskit::Pocolog
                 end
             end
             return nil, out_io_streams
+        rescue Pocolog::NotEnoughData => e
+            reporter.warn "#{logfile_path.basename} looks truncated (#{e.message}), stopping processing but keeping the samples processed so far"
+            reporter.current = in_io.size + reporter_offset
+            return nil, out_io_streams
+
         rescue Exception => e
             return e, (out_io_streams || Array.new)
         ensure
