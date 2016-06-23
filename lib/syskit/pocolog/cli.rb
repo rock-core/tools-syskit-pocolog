@@ -4,6 +4,7 @@ require 'roby/cli/base'
 
 require 'syskit/pocolog'
 require 'syskit/pocolog/normalize'
+require 'syskit/pocolog/import'
 require 'tty-progressbar'
 require 'pocolog/cli/null_reporter'
 require 'pocolog/cli/tty_reporter'
@@ -76,6 +77,14 @@ module Syskit::Pocolog
                 Syskit::Pocolog.normalize(paths, output_path: output_path, reporter: reporter)
             ensure reporter.finish
             end
+        end
+
+        desc 'import', 'normalize and import a raw dataset into a syskit-pocolog datastore'
+        def import(datastore_path, dataset_path)
+            datastore_path = Pathname.new(datastore_path).realpath
+            dataset_path   = Pathname.new(dataset_path).realpath
+
+            Syskit::Pocolog.import(datastore_path, dataset_path)
         end
     end
 end
