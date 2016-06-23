@@ -53,17 +53,20 @@ module Syskit::Pocolog
             pocolog_files = Syskit::Pocolog.logfiles_in_dir(dir_path)
             text_files    = Pathname.glob(dir_path + "*.txt")
             roby_files    = Pathname.glob(dir_path + "*-events.log")
+            if roby_files.size > 1
+                raise ArgumentError, "more than one Roby event log found"
+            end
             ignored = pocolog_files.map { |p| Pathname.new(Pocolog::Logfiles.default_index_filename(p.to_s)) }
             ignored.concat roby_files.map { |p| p.sub(/-events.log$/, '-index.log') }
 
             all_files = Pathname.enum_for(:glob, dir_path + "*").to_a
             remaining = (all_files - pocolog_files - text_files - roby_files - ignored)
-            return pocolog_files, text_files, roby_files, remaining
+            return pocolog_files, text_files, roby_files.first, remaining
         end
 
         # Import a dataset into the store
         def import(dir_path, silent: false)
-            pocolog_files, text_files, roby_files, ignored_entries =
+            pocolog_files, text_files, roby_event_log, ignored_entries =
                 prepare_import(dir_path)
 
             in_incoming do |output_dir_path|
@@ -72,10 +75,12 @@ module Syskit::Pocolog
                 end
                 pocolog_digests = normalize_pocolog_files(output_dir_path, pocolog_files, silent: silent)
 
-                if !silent
-                    puts "Copying #{roby_files.size} Roby event logs"
+                if roby_event_log
+                    if !silent
+                        puts "Copying the Roby event log"
+                    end
+                    roby_digests    = copy_roby_event_log(output_dir_path, roby_event_log)
                 end
-                roby_digests    = copy_roby_files(output_dir_path, roby_files)
 
                 if !silent
                     puts "Copying #{text_files.size} text files"
@@ -164,13 +169,12 @@ module Syskit::Pocolog
         # @param [Array<Pathname>] paths the input roby log files
         # @return [Hash<Pathname,Digest::SHA256>] a hash of the log file's
         #   pathname to the file's SHA256 digest
-        def copy_roby_files(output_dir, files)
-            FileUtils.cp files, output_dir
-            files.inject(Hash.new) do |h, path|
-                digest = Digest::SHA256.new
-                digest.update(path.read)
-                h.merge!((output_dir + path.basename) => digest)
-            end
+        def copy_roby_event_log(output_dir, event_log)
+            target_file = output_dir + "roby-events.log"
+            FileUtils.cp event_log, target_file
+            digest = Digest::SHA256.new
+            digest.update(event_log.read)
+            Hash[target_file => digest]
         end
 
         # @api private

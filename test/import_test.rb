@@ -62,33 +62,33 @@ module Syskit::Pocolog
                 FileUtils.touch(file0_1 = logfile_pathname('file0.1.log'))
                 FileUtils.touch(file0_0 = logfile_pathname('file0.0.log'))
                 FileUtils.touch(file1_0 = logfile_pathname('file1.0.log'))
-                assert_equal [[file0_0, file0_1, file1_0], [], [], []], import.prepare_import(logfile_pathname)
+                assert_equal [[file0_0, file0_1, file1_0], [], nil, []], import.prepare_import(logfile_pathname)
             end
             it "lists the test files that should be copied" do
                 FileUtils.touch(path = logfile_pathname('file0.txt'))
-                assert_equal [[], [path], [], []], import.prepare_import(logfile_pathname)
+                assert_equal [[], [path], nil, []], import.prepare_import(logfile_pathname)
             end
             it "lists the Roby log files that should be copied" do
-                FileUtils.touch(path = logfile_pathname('roby-events.log'))
-                assert_equal [[], [], [path], []], import.prepare_import(logfile_pathname)
+                FileUtils.touch(path = logfile_pathname('test-events.log'))
+                assert_equal [[], [], path, []], import.prepare_import(logfile_pathname)
             end
             it "ignores pocolog's index files" do
                 FileUtils.touch(path = logfile_pathname('file0.1.log'))
                 FileUtils.touch(logfile_pathname('file0.1.idx'))
-                assert_equal [[path], [], [], []], import.prepare_import(logfile_pathname)
+                assert_equal [[path], [], nil, []], import.prepare_import(logfile_pathname)
             end
             it "ignores Roby index files" do
-                FileUtils.touch(path = logfile_pathname('roby-events.log'))
-                FileUtils.touch(logfile_pathname('roby-index.log'))
-                assert_equal [[], [], [path], []], import.prepare_import(logfile_pathname)
+                FileUtils.touch(path = logfile_pathname('test-events.log'))
+                FileUtils.touch(logfile_pathname('test-index.log'))
+                assert_equal [[], [], path, []], import.prepare_import(logfile_pathname)
             end
             it "lists unrecognized files" do
                 FileUtils.touch(path = logfile_pathname('not_matching'))
-                assert_equal [[], [], [], [path]], import.prepare_import(logfile_pathname)
+                assert_equal [[], [], nil, [path]], import.prepare_import(logfile_pathname)
             end
             it "lists unrecognized directories" do
                 (path = logfile_pathname('not_matching')).mkpath
-                assert_equal [[], [], [], [path]], import.prepare_import(logfile_pathname)
+                assert_equal [[], [], nil, [path]], import.prepare_import(logfile_pathname)
             end
         end
 
@@ -99,7 +99,7 @@ module Syskit::Pocolog
                         metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port']
                 end
                 FileUtils.touch logfile_pathname('test.txt')
-                FileUtils.touch logfile_pathname('roby-events.log')
+                FileUtils.touch logfile_pathname('test-events.log')
                 FileUtils.touch logfile_pathname('not_recognized_file')
                 logfile_pathname('not_recognized_dir').mkpath
                 FileUtils.touch logfile_pathname('not_recognized_dir', 'test')
@@ -139,9 +139,9 @@ module Syskit::Pocolog
                 assert logfile_pathname('test.txt').exist?
                 assert (import_dir + 'text' + 'test.txt').exist?
             end
-            it "copies the roby log files" do
+            it "copies the roby log files into roby-events.log" do
                 import_dir = import.import(logfile_pathname, silent: true)
-                assert logfile_pathname('roby-events.log').exist?
+                assert logfile_pathname('test-events.log').exist?
                 assert (import_dir + 'roby-events.log').exist?
             end
             it "copies the unrecognized files" do
