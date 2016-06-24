@@ -232,9 +232,21 @@ module Syskit::Pocolog
                 if relative_path.each_filename.find { |p| p == ".." }
                     raise InvalidIdentityMetadata, "found path #{entry.path} not within the dataset"
                 end
-                Hash['path' => entry.path.relative_path_from(dataset_dir).to_s,
-                     'sha2' => validate_encoded_sha2(entry.sha2),
-                     'size' => Integer(entry.size)]
+                size = begin Integer(entry.size)
+                       rescue ArgumentError => e
+                           raise InvalidIdentityMetadata, "#{entry.size} is not a valid file size"
+                       end
+                if size < 0
+                    raise InvalidIdentityMetadata, "#{entry.size} is not a valid file size"
+                end
+                sha2 = begin validate_encoded_sha2(entry.sha2)
+                       rescue InvalidDigest
+                           raise InvalidIdentityMetadata, "#{entry.sha2} is not a valid digest"
+                       end
+
+                Hash['path' => relative_path.to_s,
+                     'sha2' => sha2,
+                     'size' => size]
             end
 
             metadata = Hash[

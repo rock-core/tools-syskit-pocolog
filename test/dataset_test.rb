@@ -107,6 +107,44 @@ module Syskit::Pocolog
                 dataset.read_dataset_identity_from_metadata_file.to_set
         end
 
+        describe "#write_dataset_identity_to_metadata_file" do
+            it "validates that the provided identity entries have paths within the dataset" do
+                entry = Dataset::IdentityEntry.new(Pathname.new('/'), 10, Digest::SHA256.hexdigest(''))
+                assert_raises(Dataset::InvalidIdentityMetadata) do
+                    dataset.write_dataset_identity_to_metadata_file([entry])
+                end
+            end
+            it "validates that the provided identity entries have sizes that are integers" do
+                entry = Dataset::IdentityEntry.new(dataset_path + "file", 'not_a_number', Digest::SHA256.hexdigest(''))
+                assert_raises(Dataset::InvalidIdentityMetadata) do
+                    dataset.write_dataset_identity_to_metadata_file([entry])
+                end
+            end
+            it "validates that the provided identity entries have sizes that are positive" do
+                entry = Dataset::IdentityEntry.new(dataset_path + "file", -20, Digest::SHA256.hexdigest(''))
+                assert_raises(Dataset::InvalidIdentityMetadata) do
+                    dataset.write_dataset_identity_to_metadata_file([entry])
+                end
+            end
+            it "validates that the provided identity entries have valid-looking sha256 digests" do
+                entry = Dataset::IdentityEntry.new(dataset_path + "file", 10, 'invalid_digest')
+                assert_raises(Dataset::InvalidIdentityMetadata) do
+                    dataset.write_dataset_identity_to_metadata_file([entry])
+                end
+            end
+            it "saves the result to the identity file" do
+                file_digest = Digest::SHA256.hexdigest('file')
+                dataset_digest = Digest::SHA256.hexdigest('dataset')
+                entry = Dataset::IdentityEntry.new(dataset_path + "file", 10, file_digest)
+                flexmock(dataset).should_receive(:compute_dataset_digest).with([entry]).and_return(dataset_digest)
+                dataset.write_dataset_identity_to_metadata_file([entry])
+                data = YAML.load((dataset_path + Dataset::BASENAME_IDENTITY_METADATA).read)
+                expected = Hash['layout_version' => Dataset::LAYOUT_VERSION, 'sha2' => dataset_digest,
+                                'identity' => [Hash['sha2' => file_digest, 'size' => 10, 'path' => 'file']]]
+                assert_equal expected, data
+            end
+        end
+
         describe "#read_dataset_identity_from_metadata_file" do
             def write_metadata(overrides = Hash.new)
                 metadata = Hash['path' => 'test',
