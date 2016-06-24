@@ -43,11 +43,36 @@ module Syskit::Pocolog
         # The path to the dataset
         #
         # @return [Pathname]
-        attr_reader :dataset_dir
+        attr_reader :dataset_path
 
         def initialize(path)
-            @dataset_dir = path.realpath
+            @dataset_path = path.realpath
             @metadata = nil
+        end
+
+        # @overload digest(string)
+        #   Computes the digest of a string
+        #
+        # @overload digest
+        #   Returns a Digest object that can be used to digest data
+        def self.digest(string = nil)
+            digest = Digest::SHA256.new
+            if string
+                digest.update(string)
+            end
+            digest
+        end
+
+        # @overload string_digest(digest)
+        #   Computes the string representation of a digest
+        #
+        # @overload string_digest(string)
+        #   Computes the string representation of a string's digest
+        def self.string_digest(object)
+            if object.respond_to?(:to_str)
+                object = digest(object)
+            end
+            object.send(DIGEST_ENCODING_METHOD)
         end
 
         # Return the digest from the dataset's path
@@ -56,10 +81,10 @@ module Syskit::Pocolog
         # @raise [InvalidPath] if the path's dirname does not match a digest
         #   format
         def digest_from_path
-            digest = dataset_dir.basename.to_s
+            digest = dataset_path.basename.to_s
             begin validate_encoded_sha2(digest)
             rescue InvalidDigest => e
-                raise InvalidPath, "#{dataset_dir}'s name does not look like a valid digest: #{e.message}"
+                raise InvalidPath, "#{dataset_path}'s name does not look like a valid digest: #{e.message}"
             end
             digest
         end
@@ -99,10 +124,10 @@ module Syskit::Pocolog
         #
         # @return [Hash<Pathname,(String,Integer)>]
         def read_dataset_identity_from_metadata_file
-            metadata_path = (dataset_dir + BASENAME_IDENTITY_METADATA)
+            metadata_path = (dataset_path + BASENAME_IDENTITY_METADATA)
             identity_metadata = (YAML.load(metadata_path.read) || Hash.new)
             if identity_metadata['layout_version'] != LAYOUT_VERSION
-                raise InvalidLayoutVersion, "layout version in #{dataset_dir} is #{identity_metadata['layout_version']}, expected #{LAYOUT_VERSION}"
+                raise InvalidLayoutVersion, "layout version in #{dataset_path} is #{identity_metadata['layout_version']}, expected #{LAYOUT_VERSION}"
             end
             digests = identity_metadata['identity']
             if !digests
@@ -129,7 +154,7 @@ module Syskit::Pocolog
                 if path.each_filename.find { |p| p == '..' }
                     raise InvalidIdentityMetadata, "found path #{path} not within the dataset"
                 end
-                IdentityEntry.new(dataset_dir + path,
+                IdentityEntry.new(dataset_path + path,
                                   Integer(path_info['size']),
                                   path_info['sha2'].to_str)
             end
@@ -140,11 +165,11 @@ module Syskit::Pocolog
         #
         # Compute the encoded SHA2 digest of a file
         def compute_file_sha2(io)
-            digest = Digest::SHA256.new
+            digest = Dataset.digest
             while block = io.read(1024 * 1024)
                 digest.update(block)
             end
-            digest.send(DIGEST_ENCODING_METHOD)
+            Dataset.string_digest(digest)
         end
 
         # Compute a dataset digest based on the identity metadata
@@ -153,7 +178,7 @@ module Syskit::Pocolog
         # but does not validate it against the data on-disk
         def compute_dataset_digest(dataset_identity = read_dataset_identity_from_metadata_file)
             dataset_digest_data = dataset_identity.map do |entry|
-                path = entry.path.relative_path_from(dataset_dir).to_s
+                path = entry.path.relative_path_from(dataset_path).to_s
                 [path, entry.size, entry.sha2]
             end
             dataset_digest_data = dataset_digest_data.
@@ -162,17 +187,17 @@ module Syskit::Pocolog
                     "#{sha2} #{size} #{path}"
                 end.
                 join("\n")
-            Digest::SHA256.send(DIGEST_ENCODING_METHOD, dataset_digest_data)
+            Dataset.string_digest(dataset_digest_data)
         end
 
         # Enumerate the file's in a dataset that are considered 'important',
         # that is are part of the dataset's identity
         def each_important_file
             return enum_for(__method__) if !block_given?
-            Pathname.glob(dataset_dir + "pocolog" + "*.*.log") do |path|
+            Pathname.glob(dataset_path + "pocolog" + "*.*.log") do |path|
                 yield(path)
             end
-            Pathname.glob(dataset_dir + "*-events.log") do |path|
+            Pathname.glob(dataset_path + "*-events.log") do |path|
                 yield(path)
             end
         end
@@ -235,7 +260,7 @@ module Syskit::Pocolog
         def write_dataset_identity_to_metadata_file(dataset_identity = compute_dataset_identity_from_files)
             dataset_digest = compute_dataset_digest(dataset_identity)
             dataset_identity = dataset_identity.map do |entry|
-                relative_path = entry.path.relative_path_from(dataset_dir)
+                relative_path = entry.path.relative_path_from(dataset_path)
                 if relative_path.each_filename.find { |p| p == ".." }
                     raise InvalidIdentityMetadata, "found path #{entry.path} not within the dataset"
                 end
@@ -261,7 +286,7 @@ module Syskit::Pocolog
                 'sha2' => dataset_digest,
                 'identity' => dataset_identity
             ]
-            (dataset_dir + BASENAME_IDENTITY_METADATA).open('w') do |io|
+            (dataset_path + BASENAME_IDENTITY_METADATA).open('w') do |io|
                 YAML.dump metadata, io
             end
         end
@@ -328,7 +353,7 @@ module Syskit::Pocolog
         def metadata
             return @metadata if @metadata
 
-            path = (dataset_dir + BASENAME_METADATA)
+            path = (dataset_path + BASENAME_METADATA)
             if path.exist?
                 metadata_read_from_file
             else
@@ -338,7 +363,7 @@ module Syskit::Pocolog
 
         # Re-read the metadata from file, resetting the current metadata
         def metadata_read_from_file
-            loaded = YAML.load((dataset_dir + BASENAME_METADATA).read)
+            loaded = YAML.load((dataset_path + BASENAME_METADATA).read)
             @metadata = loaded.inject(Hash.new) do |h, (k, v) |
                 h.merge!(k => v.to_set)
             end
@@ -351,7 +376,7 @@ module Syskit::Pocolog
             dumped = metadata.inject(Hash.new) do |h, (k, v)|
                 h.merge!(k => v.to_a)
             end
-            (dataset_dir + BASENAME_METADATA).open('w') do |io|
+            (dataset_path + BASENAME_METADATA).open('w') do |io|
                 YAML.dump(dumped, io)
             end
         end

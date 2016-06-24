@@ -2,49 +2,17 @@ require 'syskit/pocolog/normalize'
 require 'pocolog/cli/tty_reporter'
 
 module Syskit::Pocolog
-    def self.import(datastore_path, dataset_path)
-        Import.new(datastore_path).import(dataset_path)
+    def self.import(datastore, dataset_path)
+        Import.new(datastore).import(dataset_path)
     end
 
     # Import dataset(s) in a datastore
     class Import
         class DatasetAlreadyExists < RuntimeError; end
 
-        attr_reader :datastore_path
-        def initialize(datastore_path)
-            @datastore_path = datastore_path
-        end
-
-        # @api private
-        #
-        # Create a working directory in the incoming dir of the data store and
-        # yield
-        #
-        # The created dir is deleted if it still exists after the block
-        # returned. This ensures that no incoming leftovers are kept if an
-        # opeartion fails
-        def in_incoming(keep: false)
-            incoming_dir = (datastore_path + "incoming")
-            incoming_dir.mkpath
-
-            i = 0
-            begin
-                while (import_dir = (incoming_dir + i.to_s)).exist?
-                    i += 1
-                end
-                import_dir.mkdir
-            rescue Errno::EEXIST
-                i += 1
-                retry
-            end
-
-            begin
-                yield(import_dir)
-            ensure
-                if !keep && import_dir.exist?
-                    import_dir.rmtree
-                end
-            end
+        attr_reader :datastore
+        def initialize(datastore)
+            @datastore = datastore
         end
 
         # Compute the information about what will need to be done during the
@@ -65,63 +33,97 @@ module Syskit::Pocolog
         end
 
         # Import a dataset into the store
-        def import(dir_path, silent: false)
+        #
+        # @param [Pathname] dir_path the input directory
+        # @return [Pathname] the directory of the imported dataset in the store
+        def import(dir_path, silent: false, force: false)
+            datastore.in_incoming do |output_dir_path|
+                dataset = normalize_dataset(dir_path, output_dir_path, silent: silent)
+                move_dataset_to_store(dataset, force: force)
+            end
+        end
+
+        # Move the given dataset to the store
+        #
+        # @param [Boolean] force if force (the default), the method will fail if
+        #   the dataset is already in the store. Otherwise, it will erase the
+        #   existing dataset with the new one
+        # @return [Pathname] the path to the new dataset in the store
+        # @raise DatasetAlreadyExists if a dataset already exists with the same
+        #   ID than the new one and 'force' is false
+        def move_dataset_to_store(dataset, force: false)
+            dataset_digest = dataset.compute_dataset_digest
+
+            if datastore.has?(dataset_digest)
+                if force
+                    datastore.delete(dataset_digest)
+                    warn "replacing existing dataset #{dataset_digest} with new one"
+                else
+                    raise DatasetAlreadyExists, "a dataset identical to #{dataset.dataset_path} already exists in the store (computed digest is #{dataset_digest})"
+                end
+            end
+
+            final_dir = datastore.path_of(dataset_digest)
+            FileUtils.mv dataset.dataset_path, final_dir
+            final_dir
+        end
+
+        # Normalize the contents of the source folder into a dataset folder
+        # structure
+        #
+        # It does not import the result into the store
+        #
+        # @param [Pathname] dir_path the input directory
+        # @param [Pathname] output_dir_path the output directory
+        # @return [Dataset] the resulting dataset
+        def normalize_dataset(dir_path, output_dir_path, silent: false)
             pocolog_files, text_files, roby_event_log, ignored_entries =
                 prepare_import(dir_path)
 
-            in_incoming do |output_dir_path|
-                if !silent
-                    puts "Normalizing pocolog log files"
-                end
-                pocolog_digests = normalize_pocolog_files(output_dir_path, pocolog_files, silent: silent)
-
-                if roby_event_log
-                    if !silent
-                        puts "Copying the Roby event log"
-                    end
-                    roby_digests    = copy_roby_event_log(output_dir_path, roby_event_log)
-                end
-
-                if !silent
-                    puts "Copying #{text_files.size} text files"
-                end
-                copy_text_files(output_dir_path, text_files)
-
-                if !silent
-                    puts "Copying #{ignored_entries.size} remaining files and folders"
-                end
-                copy_ignored_entries(output_dir_path, ignored_entries)
-
-                dataset = Dataset.new(output_dir_path)
-                digests = pocolog_digests.merge(roby_digests)
-                metadata = digests.inject(Array.new) do |a, (path, digest)|
-                    a << Dataset::IdentityEntry.new(path, path.size, digest.hexdigest)
-                end
-
-                dataset.weak_validate_identity_metadata(metadata)
-                dataset.write_dataset_identity_to_metadata_file(metadata)
-                dataset_digest = dataset.compute_dataset_digest
-                if (datastore_path + dataset_digest).exist?
-                    raise DatasetAlreadyExists, "a dataset identical to #{dir_path} already exists in the store (computed digest is #{dataset_digest})"
-                end
-
-                roby_info_yml_path = (dir_path + "info.yml")
-                if roby_info_yml_path.exist?
-                    begin roby_info = YAML.load(roby_info_yml_path.read)
-                    rescue Psych::SyntaxError
-                        warn "failed to load Roby metadata from #{roby_info_yml_path}"
-                    end
-                    if roby_info && roby_info.respond_to?(:to_ary) && roby_info.first.respond_to?(:to_hash)
-                        import_roby_metadata(dataset, roby_info.first.to_hash)
-                    end
-                end
-
-                dataset.metadata_write_to_file
-
-                final_dir = (datastore_path + dataset_digest)
-                FileUtils.mv output_dir_path, final_dir
-                final_dir
+            if !silent
+                puts "Normalizing pocolog log files"
             end
+            pocolog_digests = normalize_pocolog_files(output_dir_path, pocolog_files, silent: silent)
+
+            if roby_event_log
+                if !silent
+                    puts "Copying the Roby event log"
+                end
+                roby_digests    = copy_roby_event_log(output_dir_path, roby_event_log)
+            end
+
+            if !silent
+                puts "Copying #{text_files.size} text files"
+            end
+            copy_text_files(output_dir_path, text_files)
+
+            if !silent
+                puts "Copying #{ignored_entries.size} remaining files and folders"
+            end
+            copy_ignored_entries(output_dir_path, ignored_entries)
+
+            dataset = Dataset.new(output_dir_path)
+            digests = pocolog_digests.merge(roby_digests)
+            metadata = digests.inject(Array.new) do |a, (path, digest)|
+                a << Dataset::IdentityEntry.new(path, path.size, digest.hexdigest)
+            end
+
+            dataset.weak_validate_identity_metadata(metadata)
+            dataset.write_dataset_identity_to_metadata_file(metadata)
+
+            roby_info_yml_path = (dir_path + "info.yml")
+            if roby_info_yml_path.exist?
+                begin roby_info = YAML.load(roby_info_yml_path.read)
+                rescue Psych::SyntaxError
+                    warn "failed to load Roby metadata from #{roby_info_yml_path}"
+                end
+                if roby_info && roby_info.respond_to?(:to_ary) && roby_info.first.respond_to?(:to_hash)
+                    import_roby_metadata(dataset, roby_info.first.to_hash)
+                end
+            end
+
+            dataset.metadata_write_to_file
+            dataset
         end
 
         # @api private
