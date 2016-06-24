@@ -155,6 +155,14 @@ module Syskit::Pocolog
                 assert (import_dir + 'ignored' + 'not_recognized_dir').exist?
                 assert (import_dir + 'ignored' + 'not_recognized_dir' + 'test').exist?
             end
+            it "imports the Roby metadata" do
+                roby_metadata = Array[Hash['app_name' => 'test']]
+                logfile_pathname("info.yml").open('w') do |io|
+                    YAML.dump(roby_metadata, io)
+                end
+                import_dir = import.import(logfile_pathname, silent: true)
+                assert_equal Hash['roby:app_name' => Set['test']], Dataset.new(import_dir).metadata
+            end
         end
     end
 end

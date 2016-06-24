@@ -101,10 +101,22 @@ module Syskit::Pocolog
                 dataset.weak_validate_identity_metadata(metadata)
                 dataset.write_dataset_identity_to_metadata_file(metadata)
                 dataset_digest = dataset.compute_dataset_digest
-
                 if (datastore_path + dataset_digest).exist?
                     raise DatasetAlreadyExists, "a dataset identical to #{dir_path} already exists in the store (computed digest is #{dataset_digest})"
                 end
+
+                roby_info_yml_path = (dir_path + "info.yml")
+                if roby_info_yml_path.exist?
+                    begin roby_info = YAML.load(roby_info_yml_path.read)
+                    rescue Psych::SyntaxError
+                        warn "failed to load Roby metadata from #{roby_info_yml_path}"
+                    end
+                    if roby_info && roby_info.respond_to?(:to_ary) && roby_info.first.respond_to?(:to_hash)
+                        import_roby_metadata(dataset, roby_info.first.to_hash)
+                    end
+                end
+
+                dataset.metadata_write_to_file
 
                 final_dir = (datastore_path + dataset_digest)
                 FileUtils.mv output_dir_path, final_dir
@@ -192,6 +204,13 @@ module Syskit::Pocolog
                 out_ignored_dir = (output_dir + 'ignored')
                 out_ignored_dir.mkpath
                 FileUtils.cp_r paths, out_ignored_dir
+            end
+        end
+
+        # Import the metadata from Roby into the dataset's own metadata
+        def import_roby_metadata(dataset, roby_info)
+            roby_info.each do |k, v|
+                dataset.metadata_add("roby:#{k}", v)
             end
         end
     end

@@ -286,6 +286,107 @@ module Syskit::Pocolog
                 end
             end
         end
+
+        describe "#metadata_reset" do
+            before do
+                (dataset_path + Dataset::BASENAME_METADATA).open('w') do |io|
+                    YAML.dump(Hash['test' => [10]], io)
+                end
+            end
+            it "empties the metadata" do
+                dataset.metadata
+                dataset.metadata_reset
+                assert_equal Hash.new, dataset.metadata
+            end
+            it "does not cause a read from disk if called first" do
+                flexmock(dataset).should_receive(:metadata_read_from_file).never
+                dataset.metadata_reset
+                dataset.metadata
+            end
+        end
+
+        describe "#metadata" do
+            it "loads the data from file" do
+                (dataset_path + Dataset::BASENAME_METADATA).open('w') do |io|
+                    YAML.dump(Hash['test' => [10]], io)
+                end
+                assert_equal Hash['test' => Set[10]], dataset.metadata
+            end
+            it "sets the metadata to an empty hash if there is no file" do
+                assert_equal Hash.new, dataset.metadata
+            end
+            it "loads the metadata only once" do
+                metadata_hash = dataset.metadata
+                assert_same metadata_hash, dataset.metadata
+            end
+        end
+
+        describe "#metadata_add" do
+            it "creates a new key->values mapping" do
+                dataset.metadata_add("test", 10, 20)
+                assert_equal Hash['test' => Set[10, 20]], dataset.metadata
+            end
+            it "merges new values to existing ones" do
+                dataset.metadata_add("test", 10, 20)
+                dataset.metadata_add("test", 10, 30)
+                assert_equal Hash['test' => Set[10, 20, 30]], dataset.metadata
+            end
+        end
+
+        describe "#metadata_fetch" do
+            it "returns a single value" do
+                dataset.metadata_add 'test', 10
+                assert_equal 10, dataset.metadata_fetch('test')
+            end
+            it "raises ArgumentError if more than one default value is given" do
+                assert_raises(ArgumentError) do
+                    dataset.metadata_fetch('test', 10, 20)
+                end
+            end
+            it "raises NoValue if there are none" do
+                assert_raises(Dataset::NoValue) do
+                    dataset.metadata_fetch('test')
+                end
+            end
+            it "raises MultipleValues if there is more than one" do
+                dataset.metadata_add 'test', 10, 20
+                assert_raises(Dataset::MultipleValues) do
+                    dataset.metadata_fetch('test')
+                end
+            end
+            it "returns the default if there is no value for the key" do
+                assert_equal 10, dataset.metadata_fetch('test', 10)
+            end
+        end
+
+        describe "#metadata_fetch_all" do
+            it "returns all values for the key" do
+                dataset.metadata_add 'test', 10, 20
+                assert_equal Set[10, 20], dataset.metadata_fetch_all('test')
+            end
+            it "raises NoValue if there are none and no defaults are given" do
+                assert_raises(Dataset::NoValue) do
+                    dataset.metadata_fetch_all('test')
+                end
+            end
+            it "returns the default if there is no value for the key" do
+                assert_equal Set[10, 20], dataset.metadata_fetch_all('test', 10, 20)
+            end
+        end
+
+        describe "#metadata_write_to_file" do
+            it "writes an empty metadata hash if there is no metadata" do
+                dataset.metadata_write_to_file
+                assert_equal Hash[],
+                    YAML.load((dataset_path + Dataset::BASENAME_METADATA).read)
+            end
+            it "writes the metadata to file" do
+                dataset.metadata_add 'test', 10, 20
+                dataset.metadata_write_to_file
+                assert_equal Hash['test' => [10, 20]],
+                    YAML.load((dataset_path + Dataset::BASENAME_METADATA).read)
+            end
+        end
     end
 end
 

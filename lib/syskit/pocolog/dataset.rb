@@ -11,6 +11,9 @@ module Syskit::Pocolog
         class InvalidDigest < ArgumentError; end
         class InvalidIdentityMetadata < ArgumentError; end
 
+        class MultipleValues < ArgumentError; end
+        class NoValue < ArgumentError; end
+
         # The way we encode digests into strings
         #
         # Make sure you change {ENCODED_DIGEST_LENGTH} and
@@ -27,6 +30,11 @@ module Syskit::Pocolog
         # @see write_identifying_metadata
         BASENAME_IDENTITY_METADATA = "syskit-dataset.yml"
 
+        # The basename of the file that contains identifying metadata
+        #
+        # @see write_identifying_metadata
+        BASENAME_METADATA = "syskit-metadata.yml"
+
         IdentityEntry = Struct.new :path, :size, :sha2
 
         # The path to the dataset
@@ -36,6 +44,7 @@ module Syskit::Pocolog
 
         def initialize(path)
             @dataset_dir = path.realpath
+            @metadata = nil
         end
 
         # Return the digest from the dataset's path
@@ -234,6 +243,96 @@ module Syskit::Pocolog
             ]
             (dataset_dir + BASENAME_IDENTITY_METADATA).open('w') do |io|
                 YAML.dump metadata, io
+            end
+        end
+
+        # Reset all metadata associated with this dataset
+        def metadata_reset
+            @metadata = Hash.new
+        end
+
+        # Add a new metadata value
+        def metadata_add(key, *values)
+            metadata.merge!(key => values.to_set) do |k, v1, v2|
+                v1.merge(v2)
+            end
+        end
+
+        # Get a single metadata value
+        #
+        # @param [String] key
+        # @raise MultipleValues if there is more than one value associated with
+        #   the key
+        # @raise NoValue if there are no value associated with the key and the
+        #   default value argument is not provided
+        def metadata_fetch(key, *default_value)
+            default_values = if default_value.empty?
+                                 []
+                             elsif default_value.size == 1
+                                 [default_value]
+                             else
+                                 raise ArgumentError, "expected zero or one default value, got #{default_value.size}"
+                             end
+
+            value = metadata.fetch(key, *default_values)
+            if value.size > 1
+                raise MultipleValues, "multiple values found for #{key}. Use metadata_fetch_all"
+            end
+            value.first
+        rescue KeyError
+            raise NoValue, "no value found for key #{key}"
+        end
+
+        # Get all metadata values associated with a key
+        #
+        # @param [String] key
+        # @raise NoValue if there are no value associated with the key and the
+        #   default value argument is not provided
+        #
+        # @see
+        def metadata_fetch_all(key, *default_values)
+            default_values = if default_values.empty?
+                                 []
+                             else
+                                 [default_values.to_set]
+                             end
+            metadata.fetch(key, *default_values)
+        rescue KeyError
+            raise NoValue, "no value found for key #{key}"
+        end
+
+        # Returns the dataset's metadata
+        #
+        # It is lazily loaded, i.e. loaded only the first time this method
+        # is called
+        def metadata
+            return @metadata if @metadata
+
+            path = (dataset_dir + BASENAME_METADATA)
+            if path.exist?
+                metadata_read_from_file
+            else
+                @metadata = Hash.new
+            end
+        end
+
+        # Re-read the metadata from file, resetting the current metadata
+        def metadata_read_from_file
+            loaded = YAML.load((dataset_dir + BASENAME_METADATA).read)
+            @metadata = loaded.inject(Hash.new) do |h, (k, v) |
+                h.merge!(k => v.to_set)
+            end
+        end
+
+        # Write this dataset's metadata to disk
+        #
+        # It is written in the root of the dataset, as {BASENAME_METADATA}
+        def metadata_write_to_file
+            dumped = metadata.inject(Hash.new) do |h, (k, v)|
+                h.merge!(k => v.to_a)
+            end
+            (dataset_dir + BASENAME_METADATA).open('w') do |io|
+                YAML.dump(dumped, io)
             end
         end
     end
