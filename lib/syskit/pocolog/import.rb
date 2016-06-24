@@ -90,6 +90,7 @@ module Syskit::Pocolog
                     puts "Copying the Roby event log"
                 end
                 roby_digests    = copy_roby_event_log(output_dir_path, roby_event_log)
+            else roby_digests = Hash.new
             end
 
             if !silent

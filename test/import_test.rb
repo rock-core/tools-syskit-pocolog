@@ -65,6 +65,12 @@ module Syskit::Pocolog
                 FileUtils.touch logfile_pathname('not_recognized_dir', 'test')
             end
 
+            it "can import an empty folder" do
+                Dir.mktmpdir do |dir|
+                    import.import(Pathname.new(dir), silent: true)
+                end
+            end
+
             it "moves the results under the dataset's ID" do
                 flexmock(Dataset).new_instances.should_receive(:compute_dataset_digest).
                     and_return('ABCDEF')
