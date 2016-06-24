@@ -380,6 +380,17 @@ module Syskit::Pocolog
                 YAML.dump(dumped, io)
             end
         end
+
+        # Enumerate the pocolog streams available in this dataset
+        #
+        # @yieldparam [LazyStream] stream
+        def each_pocolog_stream
+            return enum_for(__method__) if !block_given?
+            Pathname.glob(dataset_path + 'pocolog' + "*.log") do |logfile_path|
+                logfile = Pocolog::Logfiles.open(logfile_path)
+                yield(logfile.streams.first)
+            end
+        end
     end
 end
 

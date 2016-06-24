@@ -60,6 +60,8 @@ module Syskit::Pocolog
             default: 'normalized'
         method_option :override, desc: 'whether existing files in the output directory should be overriden',
             type: :boolean, default: false
+        method_option :silent, desc: 'do not display progress',
+            type: :boolean, default: false
 
         def normalize(path)
             path = Pathname.new(path).realpath
@@ -67,12 +69,16 @@ module Syskit::Pocolog
             output_path.mkpath
 
             paths = Syskit::Pocolog.logfiles_in_dir(path)
-            bytes_total = paths.inject(0) do |total, path|
-                total + path.size
+            if options[:silent]
+                reporter = Pocolog::CLI::NullReporter.new
+            else
+                bytes_total = paths.inject(0) do |total, path|
+                    total + path.size
+                end
+                reporter =
+                    Pocolog::CLI::TTYReporter.new(
+                        "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
             end
-
-            reporter = Pocolog::CLI::TTYReporter.new(
-                "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
             begin
                 Syskit::Pocolog.normalize(paths, output_path: output_path, reporter: reporter)
             ensure reporter.finish
@@ -80,11 +86,67 @@ module Syskit::Pocolog
         end
 
         desc 'import', 'normalize and import a raw dataset into a syskit-pocolog datastore'
+        method_option :silent, desc: 'do not display progress',
+            type: :boolean, default: false
+        method_option :force, desc: 'overwrite existing datasets',
+            type: :boolean, default: false
         def import(datastore_path, dataset_path)
-            datastore_path = Pathname.new(datastore_path).realpath
+            datastore = Datastore.new(Pathname.new(datastore_path))
             dataset_path   = Pathname.new(dataset_path).realpath
+            Syskit::Pocolog.import(datastore, dataset_path, force: options[:force], silent: options[:silent])
+        end
 
-            Syskit::Pocolog.import(datastore_path, dataset_path)
+        desc 'auto-import', 'import all folders looking like Syskit datasets under a root directory'
+        method_option :silent, desc: 'do not display progress',
+            type: :boolean, default: false
+        method_option :force, desc: 'overwrite existing datasets',
+            type: :boolean, default: false
+        method_option :min_duration, desc: 'ignore datasets that last for less than this many seconds. Defaults to one minutes, set to zero to disable',
+            type: :numeric, default: 60
+        def auto_import(datastore_path, root_path)
+            root_path = Pathname.new(root_path).realpath
+            datastore_path = Pathname.new(datastore_path)
+            datastore_path.mkpath
+            store = Datastore.new(datastore_path)
+
+            root_path.find do |p|
+                next if !p.directory?
+                next if !Pathname.enum_for(:glob, p + "*-events.log").any? { true }
+                next if !Pathname.enum_for(:glob, p + "*.0.log").any? { true }
+
+                last_import_digest, last_import_time = Import.find_import_info(p)
+                already_imported = (last_import_digest && store.has?(last_import_digest))
+                if already_imported && !options[:force]
+                    if !options[:silent]
+                        warn "#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again"
+                    end
+                    Find.prune
+                end
+
+                store.in_incoming do |incoming_path|
+                    importer = Import.new(store)
+                    dataset = importer.normalize_dataset(p, incoming_path, silent: options[:silent])
+                    stream_duration = dataset.each_pocolog_stream.map do |stream|
+                        stream.duration_lg
+                    end.max
+                    stream_duration ||= 0
+
+                    if already_imported
+                        # --force is implied as otherwise we would have
+                        # skipped earlier
+                        warn "#{p} seem to have already been imported but --force is given, overwriting"
+                        store.delete(last_import_digest)
+                    end
+
+                    if stream_duration >= options[:min_duration]
+                        importer.move_dataset_to_store(p, dataset, silent: options[:silent])
+                    elsif !options[:silent]
+                        warn "#{p} lasts only %.1fs, ignored" % [stream_duration]
+                    end
+                end
+
+                Find.prune
+            end
         end
     end
 end

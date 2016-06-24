@@ -2,13 +2,15 @@ require 'syskit/pocolog/normalize'
 require 'pocolog/cli/tty_reporter'
 
 module Syskit::Pocolog
-    def self.import(datastore, dataset_path)
-        Import.new(datastore).import(dataset_path)
+    def self.import(datastore, dataset_path, silent: false, force: false)
+        Import.new(datastore).import(dataset_path, silent: silent, force: force)
     end
 
     # Import dataset(s) in a datastore
     class Import
         class DatasetAlreadyExists < RuntimeError; end
+
+        BASENAME_IMPORT_TAG = ".syskit-pocolog-import"
 
         attr_reader :datastore
         def initialize(datastore)
@@ -39,25 +41,42 @@ module Syskit::Pocolog
         def import(dir_path, silent: false, force: false)
             datastore.in_incoming do |output_dir_path|
                 dataset = normalize_dataset(dir_path, output_dir_path, silent: silent)
-                move_dataset_to_store(dataset, force: force)
+                move_dataset_to_store(dir_path, dataset, force: force, silent: silent)
+            end
+        end
+
+        # Find if a directory has already been imported
+        #
+        # @return [(String,Time),nil] if the directory has already been
+        #   imported, the time and digest of the import. Otherwise, returns nil
+        def self.find_import_info(path)
+            info_path = (path + BASENAME_IMPORT_TAG)
+            if info_path.exist?
+                info = YAML.load(info_path.read)
+                return info['sha2'], info['time']
             end
         end
 
         # Move the given dataset to the store
         #
+        # @param [Pathname] dir_path the imported directory
+        # @param [Dataset] dataset the normalized dataset, ready to be moved in
+        #   the store
         # @param [Boolean] force if force (the default), the method will fail if
         #   the dataset is already in the store. Otherwise, it will erase the
         #   existing dataset with the new one
         # @return [Pathname] the path to the new dataset in the store
         # @raise DatasetAlreadyExists if a dataset already exists with the same
         #   ID than the new one and 'force' is false
-        def move_dataset_to_store(dataset, force: false)
+        def move_dataset_to_store(dir_path, dataset, force: false, silent: false)
             dataset_digest = dataset.compute_dataset_digest
 
             if datastore.has?(dataset_digest)
                 if force
                     datastore.delete(dataset_digest)
-                    warn "replacing existing dataset #{dataset_digest} with new one"
+                    if !silent
+                        warn "replacing existing dataset #{dataset_digest} with new one"
+                    end
                 else
                     raise DatasetAlreadyExists, "a dataset identical to #{dataset.dataset_path} already exists in the store (computed digest is #{dataset_digest})"
                 end
@@ -65,6 +84,11 @@ module Syskit::Pocolog
 
             final_dir = datastore.path_of(dataset_digest)
             FileUtils.mv dataset.dataset_path, final_dir
+
+            (dir_path + BASENAME_IMPORT_TAG).open('w') do |io|
+                YAML.dump(Hash['sha2' => dataset_digest, 'time' => Time.now], io)
+            end
+
             final_dir
         end
 

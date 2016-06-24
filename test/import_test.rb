@@ -1,6 +1,7 @@
 require 'test_helper'
 require 'syskit/pocolog/import'
 require 'tmpdir'
+require 'timecop'
 
 module Syskit::Pocolog
     describe Import do
@@ -140,6 +141,21 @@ module Syskit::Pocolog
                 end
                 import_dir = import.import(logfile_pathname, silent: true)
                 assert_equal Hash['roby:app_name' => Set['test']], Dataset.new(import_dir).metadata
+            end
+        end
+
+        describe "#find_import_info" do
+            it "returns nil for a directory that has not been imported" do
+                assert_nil Import.find_import_info(logfile_pathname)
+            end
+
+            it "returns the import information of an imported directory" do
+                path = Timecop.freeze(base_time = Time.now) do
+                    import.import(logfile_pathname, silent: true)
+                end
+                digest, time = Import.find_import_info(logfile_pathname)
+                assert_equal digest, path.basename.to_s
+                assert_equal base_time, time
             end
         end
     end
