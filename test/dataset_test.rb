@@ -146,16 +146,23 @@ module Syskit::Pocolog
         end
 
         describe "#read_dataset_identity_from_metadata_file" do
-            def write_metadata(overrides = Hash.new)
-                metadata = Hash['path' => 'test',
+            def write_metadata(overrides = Hash.new, layout_version: Dataset::LAYOUT_VERSION)
+                metadata = Hash[
+                    'path' => 'test',
                      'size' => 10,
                      'sha2' => Digest::SHA2.hexdigest('')].merge(overrides)
                 (dataset_path + Dataset::BASENAME_IDENTITY_METADATA).open('w') do |io|
-                    io.write YAML.dump(Hash['identity' => [metadata]])
+                    io.write YAML.dump(Hash['layout_version' => layout_version, 'identity' => [metadata]])
                 end
                 metadata
             end
 
+            it "raises InvalidLayoutVersion if there is a mismatch in the layout version" do
+                write_metadata(layout_version: Dataset::LAYOUT_VERSION - 1)
+                assert_raises(Dataset::InvalidLayoutVersion) do
+                    dataset.read_dataset_identity_from_metadata_file
+                end
+            end
             it "sets the entry's path to the file's absolute path" do
                 write_metadata('path' => 'test')
                 entry = dataset.read_dataset_identity_from_metadata_file.first

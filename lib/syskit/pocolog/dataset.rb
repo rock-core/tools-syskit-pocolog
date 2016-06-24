@@ -7,9 +7,12 @@ module Syskit::Pocolog
     class Dataset
         include Logger::Hierarchy
 
+        LAYOUT_VERSION = 1
+
         class InvalidPath < ArgumentError; end
         class InvalidDigest < ArgumentError; end
         class InvalidIdentityMetadata < ArgumentError; end
+        class InvalidLayoutVersion < InvalidIdentityMetadata; end
 
         class MultipleValues < ArgumentError; end
         class NoValue < ArgumentError; end
@@ -97,7 +100,11 @@ module Syskit::Pocolog
         # @return [Hash<Pathname,(String,Integer)>]
         def read_dataset_identity_from_metadata_file
             metadata_path = (dataset_dir + BASENAME_IDENTITY_METADATA)
-            digests = (YAML.load(metadata_path.read) || Hash.new)['identity']
+            identity_metadata = (YAML.load(metadata_path.read) || Hash.new)
+            if identity_metadata['layout_version'] != LAYOUT_VERSION
+                raise InvalidLayoutVersion, "layout version in #{dataset_dir} is #{identity_metadata['layout_version']}, expected #{LAYOUT_VERSION}"
+            end
+            digests = identity_metadata['identity']
             if !digests
                 raise InvalidIdentityMetadata, "no 'identity' field in #{metadata_path}"
             elsif !digests.respond_to?(:to_ary)
@@ -250,6 +257,7 @@ module Syskit::Pocolog
             end
 
             metadata = Hash[
+                'layout_version' => LAYOUT_VERSION,
                 'sha2' => dataset_digest,
                 'identity' => dataset_identity
             ]
