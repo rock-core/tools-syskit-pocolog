@@ -55,7 +55,7 @@ module Syskit::Pocolog
             app.run
         end
 
-        desc 'normalize', 'normalizes a data stream into a format that is suitable for the other log management commands to work'
+        desc 'normalize PATH [--out OUTPUT]', 'normalizes a data stream into a format that is suitable for the other log management commands to work'
         method_option :out, desc: 'output directory (defaults to a normalized/ folder under the source folder)',
             default: 'normalized'
         method_option :override, desc: 'whether existing files in the output directory should be overriden',
@@ -96,7 +96,7 @@ module Syskit::Pocolog
             Syskit::Pocolog.import(datastore, dataset_path, force: options[:force], silent: options[:silent])
         end
 
-        desc 'auto-import', 'import all folders looking like Syskit datasets under a root directory'
+        desc 'auto-import DATASTORE_PATH PATH', 'import all folders looking like Syskit datasets under PATH into the datastore at DATASTORE_PATH'
         method_option :silent, desc: 'do not display progress',
             type: :boolean, default: false
         method_option :force, desc: 'overwrite existing datasets',
