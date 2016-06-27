@@ -3,7 +3,7 @@ require 'tmpdir'
 
 module Syskit::Pocolog
     describe Dataset do
-        attr_reader :root_path, :dataset, :dataset_path
+        attr_reader :root_path, :dataset, :dataset_path, :cache_path, :store
         attr_reader :roby_digest, :pocolog_digest
 
         def dataset_pathname(*names)
@@ -12,17 +12,19 @@ module Syskit::Pocolog
 
         before do
             @root_path = Pathname.new(Dir.mktmpdir)
-            @dataset_path = root_path + 'dataset'
+            @store = Datastore.new(root_path)
+            @dataset_path = store.core_path_of('dataset')
             (dataset_path + 'pocolog').mkpath
             (dataset_path + 'text').mkpath
             (dataset_path + 'ignored').mkpath
-            @dataset = Dataset.new(dataset_path)
+            @cache_path = store.cache_path_of('dataset')
+            @dataset = Dataset.new(dataset_path, cache: cache_path)
 
-            create_logfile 'test.0.log' do
+            move_logfile_path (dataset_path + "pocolog").to_s
+            create_logfile 'task0::port.0.log' do
                 create_logfile_stream 'test', 
                     metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port']
             end
-            FileUtils.mv logfile_pathname('test.0.log'), dataset_pathname('pocolog', 'task0::port.0.log')
             FileUtils.touch dataset_pathname('text', 'test.txt')
             dataset_pathname('roby-events.log').open('w') { |io| io.write "ROBY" }
             FileUtils.touch dataset_pathname('ignored', 'not_recognized_file')
@@ -430,6 +432,18 @@ module Syskit::Pocolog
                 dataset.metadata_write_to_file
                 assert_equal Hash['test' => [10, 20]],
                     YAML.load((dataset_path + Dataset::BASENAME_METADATA).read)
+            end
+        end
+
+        describe "#each_pocolog_stream" do
+            it "expects the pocolog cache files in the dataset's cache directory" do
+                cache_path.mkpath
+                open_logfile logfile_path('task0::port.0.log'), index_dir: (cache_path + "pocolog").to_s
+                flexmock(Pocolog::Logfiles).new_instances.
+                    should_receive(:rebuild_and_load_index).
+                    never
+                streams = dataset.each_pocolog_stream.to_a
+                assert_equal ['test'], streams.map(&:name)
             end
         end
     end

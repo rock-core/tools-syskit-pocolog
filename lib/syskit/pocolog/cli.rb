@@ -117,21 +117,21 @@ module Syskit::Pocolog
                 next if !Pathname.enum_for(:glob, p + "*.0.log").any? { true }
 
                 if !options[:silent]
-                    STDERR.puts pastel.bold("Processing #{p}")
+                    $stderr.puts pastel.bold("Processing #{p}")
                 end
 
                 last_import_digest, last_import_time = Import.find_import_info(p)
                 already_imported = (last_import_digest && store.has?(last_import_digest))
                 if already_imported && !options[:force]
                     if !options[:silent]
-                        STDERR.puts pastel.yellow("#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again")
+                        $stderr.puts pastel.yellow("#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again")
                     end
                     Find.prune
                 end
 
-                store.in_incoming do |incoming_path|
+                store.in_incoming do |core_path, cache_path|
                     importer = Import.new(store)
-                    dataset = importer.normalize_dataset(p, incoming_path, silent: options[:silent])
+                    dataset = importer.normalize_dataset(p, core_path, cache_path: cache_path, silent: options[:silent])
                     stream_duration = dataset.each_pocolog_stream.map do |stream|
                         stream.duration_lg
                     end.max
@@ -140,14 +140,14 @@ module Syskit::Pocolog
                     if already_imported
                         # --force is implied as otherwise we would have
                         # skipped earlier
-                        STDERR.puts pastel.yellow("#{p} seem to have already been imported but --force is given, overwriting")
+                        $stderr.puts pastel.yellow("#{p} seem to have already been imported but --force is given, overwriting")
                         store.delete(last_import_digest)
                     end
 
                     if stream_duration >= options[:min_duration]
                         importer.move_dataset_to_store(p, dataset, silent: options[:silent])
                     elsif !options[:silent]
-                        STDERR.puts pastel.yellow("#{p} lasts only %.1fs, ignored" % [stream_duration])
+                        $stderr.puts pastel.yellow("#{p} lasts only %.1fs, ignored" % [stream_duration])
                     end
                 end
 

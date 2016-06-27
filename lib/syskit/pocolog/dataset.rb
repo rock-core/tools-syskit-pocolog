@@ -45,8 +45,14 @@ module Syskit::Pocolog
         # @return [Pathname]
         attr_reader :dataset_path
 
-        def initialize(path)
+        # The path to the index cache
+        #
+        # @return [Pathname]
+        attr_reader :cache_path
+
+        def initialize(path, cache: path)
             @dataset_path = path.realpath
+            @cache_path = cache
             @metadata = nil
         end
 
@@ -386,8 +392,9 @@ module Syskit::Pocolog
         # @yieldparam [LazyStream] stream
         def each_pocolog_stream
             return enum_for(__method__) if !block_given?
+            pocolog_index_dir = (cache_path + "pocolog").to_s
             Pathname.glob(dataset_path + 'pocolog' + "*.log") do |logfile_path|
-                logfile = Pocolog::Logfiles.open(logfile_path)
+                logfile = Pocolog::Logfiles.open(logfile_path, index_dir: pocolog_index_dir, silent: true)
                 yield(logfile.streams.first)
             end
         end

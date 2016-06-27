@@ -8,8 +8,7 @@ module Syskit::Pocolog
             @root_path = Pathname.new(Dir.mktmpdir)
             move_logfile_path((root_path + "logs" + "test").to_s)
             @datastore_path = root_path + "datastore"
-            datastore_path.mkpath
-            @datastore = Datastore.new(datastore_path)
+            @datastore = Datastore.create(datastore_path)
         end
 
         after do
@@ -36,10 +35,10 @@ module Syskit::Pocolog
                 FileUtils.touch logfile_path('test-events.log')
                 incoming_path = datastore_path + 'incoming' + '0'
                 flexmock(Import).new_instances.should_receive(:normalize_dataset).
-                    with(logfile_pathname, incoming_path, silent: true).
+                    with(logfile_pathname, incoming_path + "core", cache_path: incoming_path + "cache", silent: true).
                     once.pass_thru
                 flexmock(Import).new_instances.should_receive(:move_dataset_to_store).
-                    with(logfile_pathname, ->(s) { s.dataset_path == incoming_path }, silent: true).
+                    with(logfile_pathname, ->(s) { s.dataset_path == incoming_path + "core" && s.cache_path == incoming_path + "cache" }, silent: true).
                     once.pass_thru
 
                 call_cli('auto-import', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
@@ -87,7 +86,6 @@ module Syskit::Pocolog
                 FileUtils.touch logfile_path('test-events.log')
                 incoming_path = datastore_path + 'incoming' + '0'
                 flexmock(Import).new_instances.should_receive(:normalize_dataset).
-                    with(logfile_pathname, incoming_path, silent: true).
                     once.pass_thru
                 flexmock(Import).new_instances.should_receive(:move_dataset_to_store).
                     never
@@ -103,7 +101,6 @@ module Syskit::Pocolog
                 FileUtils.touch logfile_path('test-events.log')
                 incoming_path = datastore_path + 'incoming' + '0'
                 flexmock(Import).new_instances.should_receive(:normalize_dataset).
-                    with(logfile_pathname, incoming_path, silent: false).
                     once.pass_thru
                 flexmock(Import).new_instances.should_receive(:move_dataset_to_store).
                     never

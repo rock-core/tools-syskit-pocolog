@@ -39,8 +39,8 @@ module Syskit::Pocolog
         # @param [Pathname] dir_path the input directory
         # @return [Pathname] the directory of the imported dataset in the store
         def import(dir_path, silent: false, force: false)
-            datastore.in_incoming do |output_dir_path|
-                dataset = normalize_dataset(dir_path, output_dir_path, silent: silent)
+            datastore.in_incoming do |core_path, cache_path|
+                dataset = normalize_dataset(dir_path, core_path, cache_path: cache_path, silent: silent)
                 move_dataset_to_store(dir_path, dataset, force: force, silent: silent)
             end
         end
@@ -82,14 +82,18 @@ module Syskit::Pocolog
                 end
             end
 
-            final_dir = datastore.path_of(dataset_digest)
-            FileUtils.mv dataset.dataset_path, final_dir
+            final_core_dir = datastore.core_path_of(dataset_digest)
+            FileUtils.mv dataset.dataset_path, final_core_dir
+            final_cache_dir = datastore.cache_path_of(dataset_digest)
+            if final_core_dir != final_cache_dir
+                FileUtils.mv dataset.cache_path, final_cache_dir
+            end
 
             (dir_path + BASENAME_IMPORT_TAG).open('w') do |io|
                 YAML.dump(Hash['sha2' => dataset_digest, 'time' => Time.now], io)
             end
 
-            final_dir
+            final_core_dir
         end
 
         # Normalize the contents of the source folder into a dataset folder
@@ -100,14 +104,14 @@ module Syskit::Pocolog
         # @param [Pathname] dir_path the input directory
         # @param [Pathname] output_dir_path the output directory
         # @return [Dataset] the resulting dataset
-        def normalize_dataset(dir_path, output_dir_path, silent: false)
+        def normalize_dataset(dir_path, output_dir_path, cache_path: output_dir_path, silent: false)
             pocolog_files, text_files, roby_event_log, ignored_entries =
                 prepare_import(dir_path)
 
             if !silent
                 puts "Normalizing pocolog log files"
             end
-            pocolog_digests = normalize_pocolog_files(output_dir_path, pocolog_files, silent: silent)
+            pocolog_digests = normalize_pocolog_files(output_dir_path, pocolog_files, silent: silent, cache_path: cache_path)
 
             if roby_event_log
                 if !silent
@@ -127,7 +131,7 @@ module Syskit::Pocolog
             end
             copy_ignored_entries(output_dir_path, ignored_entries)
 
-            dataset = Dataset.new(output_dir_path)
+            dataset = Dataset.new(output_dir_path, cache: cache_path)
             digests = pocolog_digests.merge(roby_digests)
             metadata = digests.inject(Array.new) do |a, (path, digest)|
                 a << Dataset::IdentityEntry.new(path, path.size, digest.hexdigest)
@@ -162,11 +166,12 @@ module Syskit::Pocolog
         # @return [Hash<Pathname,Digest::SHA256>] a hash of the log file's
         #   pathname to the file's SHA256 digest. The pathnames are
         #   relative to output_dir
-        def normalize_pocolog_files(output_dir, files, silent: false)
+        def normalize_pocolog_files(output_dir, files, silent: false, cache_path: output_dir)
             return Hash.new if files.empty?
 
             out_pocolog_dir = (output_dir + "pocolog")
             out_pocolog_dir.mkpath
+            out_pocolog_cache_dir = (cache_path + "pocolog")
             bytes_total = files.inject(0) { |s, p| s + p.size }
             reporter =
                 if silent
@@ -177,7 +182,7 @@ module Syskit::Pocolog
                 end
 
             Syskit::Pocolog.normalize(
-                files, output_path: out_pocolog_dir, reporter: reporter,
+                files, output_path: out_pocolog_dir, index_dir: out_pocolog_cache_dir, reporter: reporter,
                 compute_sha256: true)
         ensure
             reporter.finish if reporter

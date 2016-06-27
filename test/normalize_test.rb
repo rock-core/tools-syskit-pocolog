@@ -38,6 +38,17 @@ module Syskit::Pocolog
                 open_logfile_stream (normalized_dir + "task0::port.0.log"), 'stream0'
                 open_logfile_stream (normalized_dir + "task1::port.0.log"), 'stream1'
             end
+            it "allows to specify the cache directory" do
+                logfile_pathname('normalized').mkdir
+                index_dir = logfile_pathname("cache")
+                normalize.normalize([logfile_pathname('file0.0.log')], index_dir: index_dir)
+                flexmock(Pocolog::Logfiles).new_instances.
+                    should_receive(:rebuild_and_load_index).
+                    never
+                normalized_dir = logfile_pathname('normalized')
+                open_logfile_stream (normalized_dir + "task0::port.0.log"), 'stream0', index_dir: index_dir
+                open_logfile_stream (normalized_dir + "task1::port.0.log"), 'stream1', index_dir: index_dir
+            end
             describe "digest generation" do
                 it "optionally computes the sha256 digest of the generated file, without the prologue" do
                     logfile_pathname('normalized').mkdir

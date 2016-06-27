@@ -15,9 +15,11 @@ module Syskit::Pocolog
         end
         describe "#in_incoming" do
             it "creates an incoming directory in the datastore and yields it" do
-                datastore.in_incoming do |path|
-                    assert_equal (datastore_path + 'incoming' + '0'), path
-                    assert path.directory?
+                datastore.in_incoming do |core_path, cache_path|
+                    assert_equal (datastore_path + 'incoming' + '0' + "core"), core_path
+                    assert core_path.directory?
+                    assert_equal (datastore_path + 'incoming' + '0' + "cache"), cache_path
+                    assert cache_path.directory?
                 end
             end
             it "handles having another process create a path concurrently" do
@@ -31,27 +33,31 @@ module Syskit::Pocolog
                         end
                     end
 
-                datastore.in_incoming do |path|
-                    assert_equal (datastore_path + 'incoming' + '1'), path
+                datastore.in_incoming do |core_path, cache_path|
+                    assert_equal (datastore_path + 'incoming' + '1' + "core"), core_path
+                    assert_equal (datastore_path + 'incoming' + '1' + "cache"), cache_path
                 end
             end
             it "ignores existing paths" do
                 (datastore_path + "incoming" + "0").mkpath
-                datastore.in_incoming do |path|
-                    assert_equal (datastore_path + 'incoming' + '1'), path
+                datastore.in_incoming do |core_path, cache_path|
+                    assert_equal (datastore_path + 'incoming' + '1' + "core"), core_path
+                    assert_equal (datastore_path + 'incoming' + '1' + "cache"), cache_path
                 end
             end
-            it "deletes the created path if it still exists at the end of the block" do
-                created_path = datastore.in_incoming do |path|
-                    path
+            it "deletes the created paths if they still exist at the end of the block" do
+                created_paths = datastore.in_incoming do |core_path, cache_path|
+                    [core_path, cache_path]
                 end
-                refute created_path.exist?
+                refute created_paths.any?(&:exist?)
             end
             it "does nothing if the path does not exist anymore at the end of the block" do
-                created_path = datastore.in_incoming do |path|
-                    FileUtils.mv path, (root_path + "safe")
+                datastore.in_incoming do |core_path, cache_path|
+                    FileUtils.mv core_path, (root_path + "core")
+                    FileUtils.mv cache_path, (root_path + "cache")
                 end
-                assert (root_path + "safe").exist?
+                assert (root_path + "core").exist?
+                assert (root_path + "cache").exist?
             end
         end
 
@@ -59,7 +65,7 @@ module Syskit::Pocolog
             attr_reader :digest
             before do
                 @digest = Dataset.string_digest('exists')
-                (datastore_path + digest).mkpath
+                (datastore_path + 'core' + digest).mkpath
             end
 
             it "returns false if there is no folder with the dataset digest in the store" do
@@ -71,15 +77,25 @@ module Syskit::Pocolog
         end
 
         describe "#delete" do
-            attr_reader :digest, :dataset_path
+            attr_reader :digest, :dataset_path, :cache_path
             before do
                 @digest = Dataset.string_digest('exists')
-                @dataset_path = datastore.path_of(digest)
+                @dataset_path = datastore.core_path_of(digest)
                 dataset_path.mkpath
+                @cache_path = datastore.cache_path_of(digest)
+                cache_path.mkpath
             end
 
             it "deletes the dataset's path and its contents" do
                 FileUtils.touch dataset_path + "file"
+                datastore.delete(digest)
+                assert !dataset_path.exist?
+                assert !cache_path.exist?
+            end
+
+            it "ignores a missing cache path" do
+                FileUtils.touch dataset_path + "file"
+                cache_path.rmtree
                 datastore.delete(digest)
                 assert !dataset_path.exist?
             end
@@ -89,7 +105,7 @@ module Syskit::Pocolog
             attr_reader :digest, :dataset_path
             before do
                 @digest = Dataset.string_digest('exists')
-                @dataset_path = datastore.path_of(digest)
+                @dataset_path = datastore.core_path_of(digest)
                 dataset_path.mkpath
                 dataset = Dataset.new(dataset_path)
                 dataset.write_dataset_identity_to_metadata_file

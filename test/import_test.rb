@@ -11,7 +11,7 @@ module Syskit::Pocolog
             @root_path = Pathname.new(Dir.mktmpdir)
             @datastore_path = root_path + 'datastore'
             datastore_path.mkpath
-            @datastore = Datastore.new(datastore_path)
+            @datastore = Datastore.create(datastore_path)
             @import = Import.new(datastore)
         end
         after do
@@ -76,12 +76,12 @@ module Syskit::Pocolog
                 flexmock(Dataset).new_instances.should_receive(:compute_dataset_digest).
                     and_return('ABCDEF')
                 import_dir = import.import(logfile_pathname, silent: true)
-                assert_equal(datastore_path + 'ABCDEF', import_dir)
+                assert_equal(datastore_path + "core" + 'ABCDEF', import_dir)
             end
             it "raises if the target dataset ID already exists" do
                 flexmock(Dataset).new_instances.should_receive(:compute_dataset_digest).
                     and_return('ABCDEF')
-                (datastore_path + "ABCDEF").mkpath
+                (datastore_path + "core" + "ABCDEF").mkpath
                 assert_raises(Import::DatasetAlreadyExists) do
                     import.import(logfile_pathname, silent: true)
                 end
@@ -90,10 +90,10 @@ module Syskit::Pocolog
                 digest = 'ABCDEF'
                 flexmock(Dataset).new_instances.should_receive(:compute_dataset_digest).
                     and_return(digest)
-                (datastore_path + digest).mkpath
-                FileUtils.touch (datastore_path + digest + "file")
+                (datastore_path + "core" + digest).mkpath
+                FileUtils.touch (datastore_path + "core" + digest + "file")
                 _out, err = capture_io do
-                    import.import(logfile_pathname, silent: true, force: true)
+                    import.import(logfile_pathname, silent: false, force: true)
                 end
                 assert_match /replacing existing dataset #{digest} with new one/, err
                 assert !(datastore_path + digest + "file").exist?
@@ -107,8 +107,12 @@ module Syskit::Pocolog
                 end
             end
             it "normalizes the pocolog logfiles" do
+                expected_normalize_args = hsh(
+                    output_path: datastore_path + 'incoming' + '0' + 'core' + 'pocolog',
+                    index_dir: datastore_path + "incoming" + "0" + "cache" + "pocolog")
+
                 flexmock(Syskit::Pocolog).should_receive(:normalize).
-                    with([logfile_pathname('test.0.log')], hsh(output_path: (datastore_path + 'incoming' + '0' + 'pocolog'))).once.
+                    with([logfile_pathname('test.0.log')], expected_normalize_args).once.
                     pass_thru
                 import_dir = import.import(logfile_pathname, silent: true)
                 assert (import_dir + 'pocolog' + 'task0::port.0.log').exist?

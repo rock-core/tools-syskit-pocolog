@@ -10,21 +10,40 @@ module Syskit::Pocolog
             @datastore_path = datastore_path.realpath
         end
 
+        # Setup a directory structure for the given path to be a valid datastore
+        def self.create(datastore_path)
+            datastore_path.mkpath
+            (datastore_path + "core").mkpath
+            (datastore_path + "cache").mkpath
+            (datastore_path + "incoming").mkpath
+            store = Datastore.new(datastore_path)
+        end
+
         # Whether a dataset with the given ID exists
         def has?(digest)
-            path_of(digest).exist?
+            core_path_of(digest).exist?
         end
 
         # Remove an existing dataset
         def delete(digest)
-            path_of(digest).rmtree
+            core_path_of(digest).rmtree
+            if cache_path_of(digest).exist?
+                cache_path_of(digest).rmtree
+            end
         end
 
         # The full path to a dataset
         #
         # The dataset itself is not guaranteed to exist
-        def path_of(digest)
-            datastore_path + digest
+        def core_path_of(digest)
+            datastore_path + "core" + digest
+        end
+
+        # The full path to a dataset
+        #
+        # The dataset itself is not guaranteed to exist
+        def cache_path_of(digest)
+            datastore_path + "cache" + digest
         end
 
         # Get an existing dataset
@@ -33,7 +52,7 @@ module Syskit::Pocolog
                 raise ArgumentError, "no dataset with digest #{digest} exist"
             end
 
-            dataset = Dataset.new(path_of(digest))
+            dataset = Dataset.new(core_path_of(digest), cache: cache_path_of(digest))
             dataset.weak_validate_identity_metadata
             dataset.metadata
             dataset
@@ -63,7 +82,11 @@ module Syskit::Pocolog
             end
 
             begin
-                yield(import_dir)
+                core_path = import_dir + "core"
+                cache_path = import_dir + "cache"
+                core_path.mkdir
+                cache_path.mkdir
+                yield(import_dir + "core", import_dir + "cache")
             ensure
                 if !keep && import_dir.exist?
                     import_dir.rmtree
