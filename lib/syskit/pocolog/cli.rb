@@ -109,16 +109,22 @@ module Syskit::Pocolog
             datastore_path.mkpath
             store = Datastore.new(datastore_path)
 
+            pastel = Pastel.new
+
             root_path.find do |p|
                 next if !p.directory?
                 next if !Pathname.enum_for(:glob, p + "*-events.log").any? { true }
                 next if !Pathname.enum_for(:glob, p + "*.0.log").any? { true }
 
+                if !options[:silent]
+                    STDERR.puts pastel.bold("Processing #{p}")
+                end
+
                 last_import_digest, last_import_time = Import.find_import_info(p)
                 already_imported = (last_import_digest && store.has?(last_import_digest))
                 if already_imported && !options[:force]
                     if !options[:silent]
-                        warn "#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again"
+                        STDERR.puts pastel.yellow("#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again")
                     end
                     Find.prune
                 end
@@ -134,14 +140,14 @@ module Syskit::Pocolog
                     if already_imported
                         # --force is implied as otherwise we would have
                         # skipped earlier
-                        warn "#{p} seem to have already been imported but --force is given, overwriting"
+                        STDERR.puts pastel.yellow("#{p} seem to have already been imported but --force is given, overwriting")
                         store.delete(last_import_digest)
                     end
 
                     if stream_duration >= options[:min_duration]
                         importer.move_dataset_to_store(p, dataset, silent: options[:silent])
                     elsif !options[:silent]
-                        warn "#{p} lasts only %.1fs, ignored" % [stream_duration]
+                        STDERR.puts pastel.yellow("#{p} lasts only %.1fs, ignored" % [stream_duration])
                     end
                 end
 
