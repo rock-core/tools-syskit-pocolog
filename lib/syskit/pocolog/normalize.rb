@@ -41,6 +41,9 @@ module Syskit::Pocolog
             def path
                 wio.path
             end
+            def size
+                wio.size
+            end
             def stat
                 wio.stat
             end

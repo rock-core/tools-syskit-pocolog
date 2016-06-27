@@ -28,14 +28,6 @@ module Syskit::Pocolog
                 stream = open_logfile_stream (normalized_dir + "task1::port.0.log"), 'stream1'
                 assert_equal [[base_time + 1, base_time + 10, 1]], stream.samples.to_a
             end
-            it "optionally computes the sha256 digest of the generated file, without the prologue" do
-                logfile_pathname('normalized').mkdir
-                result = normalize.normalize([logfile_pathname('file0.0.log')], compute_sha256: true)
-
-                path = logfile_pathname('normalized', 'task0::port.0.log')
-                expected = Digest::SHA256.hexdigest(path.read[Pocolog::Format::Current::PROLOGUE_SIZE..-1])
-                assert_equal expected, result[path].hexdigest
-            end
             it "generates valid index files for the normalized streams" do
                 logfile_pathname('normalized').mkdir
                 normalize.normalize([logfile_pathname('file0.0.log')])
@@ -45,6 +37,26 @@ module Syskit::Pocolog
                 normalized_dir = logfile_pathname('normalized')
                 open_logfile_stream (normalized_dir + "task0::port.0.log"), 'stream0'
                 open_logfile_stream (normalized_dir + "task1::port.0.log"), 'stream1'
+            end
+            describe "digest generation" do
+                it "optionally computes the sha256 digest of the generated file, without the prologue" do
+                    logfile_pathname('normalized').mkdir
+                    result = normalize.normalize([logfile_pathname('file0.0.log')], compute_sha256: true)
+
+                    path = logfile_pathname('normalized', 'task0::port.0.log')
+                    expected = Digest::SHA256.hexdigest(path.read[Pocolog::Format::Current::PROLOGUE_SIZE..-1])
+                    assert_equal expected, result[path].hexdigest
+                end
+                it "generates valid index files for the normalized streams" do
+                    logfile_pathname('normalized').mkdir
+                    normalize.normalize([logfile_pathname('file0.0.log')], compute_sha256: true)
+                    flexmock(Pocolog::Logfiles).new_instances.
+                        should_receive(:rebuild_and_load_index).
+                        never
+                    normalized_dir = logfile_pathname('normalized')
+                    open_logfile_stream (normalized_dir + "task0::port.0.log"), 'stream0'
+                    open_logfile_stream (normalized_dir + "task1::port.0.log"), 'stream1'
+                end
             end
             it "detects followup streams" do
                 create_logfile 'file0.1.log' do
