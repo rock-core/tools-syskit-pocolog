@@ -85,7 +85,7 @@ module Syskit::Pocolog
             end
         end
 
-        desc 'import', 'normalize and import a raw dataset into a syskit-pocolog datastore'
+        desc 'import DATASTORE_PATH PATH', 'normalize and import a raw dataset into a syskit-pocolog datastore'
         method_option :silent, desc: 'do not display progress',
             type: :boolean, default: false
         method_option :force, desc: 'overwrite existing datasets',
