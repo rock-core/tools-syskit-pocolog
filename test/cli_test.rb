@@ -37,8 +37,14 @@ module Syskit::Pocolog
                 flexmock(Import).new_instances.should_receive(:normalize_dataset).
                     with(logfile_pathname, incoming_path + "core", cache_path: incoming_path + "cache", silent: true).
                     once.pass_thru
+                expected_dataset = lambda do |s|
+                    assert_equal incoming_path + "core", s.dataset_path
+                    assert_equal incoming_path + "cache", s.cache_path
+                    true
+                end
+
                 flexmock(Import).new_instances.should_receive(:move_dataset_to_store).
-                    with(logfile_pathname, ->(s) { s.dataset_path == incoming_path + "core" && s.cache_path == incoming_path + "cache" }, silent: true).
+                    with(logfile_pathname, expected_dataset, force: false, silent: true).
                     once.pass_thru
 
                 call_cli('auto-import', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
@@ -80,6 +86,47 @@ module Syskit::Pocolog
                 end
                 assert_match /#{logfile_pathname} seem to have already been imported but --force is given, overwriting/,
                     err
+            end
+            it "ignores datasets that do not seem to be already imported, but are" do
+                create_logfile('test.0.log') do
+                    create_logfile_stream 'test', metadata: Hash['rock_task_name' => 'task', 'rock_task_object_name' => 'port']
+                    write_logfile_sample Time.now, Time.now, 10
+                    write_logfile_sample Time.now + 10, Time.now + 1, 20
+                end
+                FileUtils.touch logfile_path('test-events.log')
+                call_cli('auto-import', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                (logfile_pathname + Import::BASENAME_IMPORT_TAG).unlink
+                flexmock(Import).new_instances.should_receive(:normalize_dataset).
+                    once.pass_thru
+                flexmock(Import).new_instances.should_receive(:move_dataset_to_store).
+                    once.pass_thru
+                _out, err = capture_io do
+                    call_cli('auto-import', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                end
+                assert_match /#{logfile_pathname} already seem to have been imported as .*Give --force/,
+                    err
+            end
+            it "imports datasets that do not seem to be already imported, but are if --force is given" do
+                create_logfile('test.0.log') do
+                    create_logfile_stream 'test', metadata: Hash['rock_task_name' => 'task', 'rock_task_object_name' => 'port']
+                    write_logfile_sample Time.now, Time.now, 10
+                    write_logfile_sample Time.now + 10, Time.now + 1, 20
+                end
+                FileUtils.touch logfile_path('test-events.log')
+                call_cli('auto-import', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                digest, _ = Import.find_import_info(logfile_pathname)
+                marker_path = datastore.core_path_of(digest) + "marker"
+                FileUtils.touch(marker_path)
+                (logfile_pathname + Import::BASENAME_IMPORT_TAG).unlink
+                flexmock(Import).new_instances.should_receive(:normalize_dataset).
+                    once.pass_thru
+                flexmock(Import).new_instances.should_receive(:move_dataset_to_store).
+                    once.pass_thru
+                _out, err = capture_io do
+                    call_cli('auto-import', '--force', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                end
+                assert_match /Replacing existing dataset #{digest} with new one/, err
+                refute marker_path.exist?
             end
             it "ignores an empty dataset if --min-duration is non-zero" do
                 create_logfile('test.0.log') {}

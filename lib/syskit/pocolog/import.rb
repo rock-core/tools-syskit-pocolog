@@ -75,7 +75,7 @@ module Syskit::Pocolog
                 if force
                     datastore.delete(dataset_digest)
                     if !silent
-                        warn "replacing existing dataset #{dataset_digest} with new one"
+                        warn "Replacing existing dataset #{dataset_digest} with new one"
                     end
                 else
                     raise DatasetAlreadyExists, "a dataset identical to #{dataset.dataset_path} already exists in the store (computed digest is #{dataset_digest})"

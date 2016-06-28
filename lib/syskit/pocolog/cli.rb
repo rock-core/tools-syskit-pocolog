@@ -145,7 +145,11 @@ module Syskit::Pocolog
                     end
 
                     if stream_duration >= options[:min_duration]
-                        importer.move_dataset_to_store(p, dataset, silent: options[:silent])
+                        begin
+                            importer.move_dataset_to_store(p, dataset, force: options[:force], silent: options[:silent])
+                        rescue Import::DatasetAlreadyExists
+                            $stderr.puts pastel.yellow("#{p} already seem to have been imported as #{dataset.compute_dataset_digest}. Give --force to import again")
+                        end
                     elsif !options[:silent]
                         $stderr.puts pastel.yellow("#{p} lasts only %.1fs, ignored" % [stream_duration])
                     end
