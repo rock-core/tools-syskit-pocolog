@@ -184,8 +184,8 @@ module Syskit::Pocolog
                 end
             end
             return nil, out_io_streams
-        rescue Pocolog::NotEnoughData => e
-            reporter.warn "#{logfile_path.basename} looks truncated (#{e.message}), stopping processing but keeping the samples processed so far"
+        rescue Pocolog::InvalidBlockFound => e
+            reporter.warn "#{logfile_path.basename} looks truncated or contains garbage (#{e.message}), stopping processing but keeping the samples processed so far"
             reporter.current = in_io.size + reporter_offset
             return nil, out_io_streams
 
