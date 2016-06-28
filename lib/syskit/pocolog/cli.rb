@@ -91,7 +91,8 @@ module Syskit::Pocolog
         method_option :force, desc: 'overwrite existing datasets',
             type: :boolean, default: false
         def import(datastore_path, dataset_path)
-            datastore = Datastore.new(Pathname.new(datastore_path))
+            datastore_path = Pathname.new(datastore_path)
+            datastore = Datastore.create(datastore_path)
             dataset_path   = Pathname.new(dataset_path).realpath
             Syskit::Pocolog.import(datastore, dataset_path, force: options[:force], silent: options[:silent])
         end
@@ -107,7 +108,7 @@ module Syskit::Pocolog
             root_path = Pathname.new(root_path).realpath
             datastore_path = Pathname.new(datastore_path)
             datastore_path.mkpath
-            store = Datastore.new(datastore_path)
+            store = Datastore.create(datastore_path)
 
             pastel = Pastel.new
 
