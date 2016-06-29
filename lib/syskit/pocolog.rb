@@ -27,7 +27,6 @@ require 'syskit/pocolog/registration_namespace'
 require 'syskit/pocolog/plugin'
 
 require 'syskit/pocolog/datastore'
-require 'syskit/pocolog/dataset'
 
 module Syskit::Pocolog
     # Returns the paths of the log files in a given directory

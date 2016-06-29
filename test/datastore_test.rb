@@ -64,12 +64,12 @@ module Syskit::Pocolog
         describe "#has?" do
             attr_reader :digest
             before do
-                @digest = Dataset.string_digest('exists')
+                @digest = Datastore::Dataset.string_digest('exists')
                 (datastore_path + 'core' + digest).mkpath
             end
 
             it "returns false if there is no folder with the dataset digest in the store" do
-                refute datastore.has?(Dataset.string_digest('does_not_exist'))
+                refute datastore.has?(Datastore::Dataset.string_digest('does_not_exist'))
             end
             it "returns true if there is a folder with the dataset digest in the store" do
                 assert datastore.has?(digest)
@@ -79,7 +79,7 @@ module Syskit::Pocolog
         describe "#delete" do
             attr_reader :digest, :dataset_path, :cache_path
             before do
-                @digest = Dataset.string_digest('exists')
+                @digest = Datastore::Dataset.string_digest('exists')
                 @dataset_path = datastore.core_path_of(digest)
                 dataset_path.mkpath
                 @cache_path = datastore.cache_path_of(digest)
@@ -104,27 +104,25 @@ module Syskit::Pocolog
         describe "#get" do
             attr_reader :digest, :dataset_path
             before do
-                @digest = Dataset.string_digest('exists')
+                @digest = Datastore::Dataset.string_digest('exists')
                 @dataset_path = datastore.core_path_of(digest)
                 dataset_path.mkpath
-                dataset = Dataset.new(dataset_path)
+                dataset = Datastore::Dataset.new(dataset_path)
                 dataset.write_dataset_identity_to_metadata_file
                 dataset.metadata_write_to_file
             end
 
             it "returns a Dataset object pointing to the path" do
                 dataset = datastore.get(digest)
-                assert_kind_of Dataset, dataset
+                assert_kind_of Datastore::Dataset, dataset
                 assert_equal dataset_path, dataset.dataset_path
             end
 
             it "raises ArgumentError if the dataset does not exist" do
                 assert_raises(ArgumentError) do
-                    datastore.get(Dataset.string_digest("does_not_exist"))
+                    datastore.get(Datastore::Dataset.string_digest("does_not_exist"))
                 end
             end
         end
     end
 end
-
-

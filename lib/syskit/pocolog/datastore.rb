@@ -1,6 +1,14 @@
 module Syskit::Pocolog
+    # Functionality related to building and using data stores
+    #
+    # Note that requiring syskit/pocolog only loads the 'using datastores' APIs.
+    # You need to require the functionality specific files in
+    # syskit/pocolog/datastore
+    #
     # A store for normalized datasets
     class Datastore
+        extend Logger::Hierarchy
+
         # The store's path on disk
         #
         # @return [Pathname]
@@ -97,3 +105,4 @@ module Syskit::Pocolog
     end
 end
 
+require 'syskit/pocolog/datastore/dataset'
