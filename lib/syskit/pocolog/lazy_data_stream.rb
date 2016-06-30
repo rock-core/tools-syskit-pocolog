@@ -13,6 +13,11 @@ module Syskit::Pocolog
         # @return [Pathname]
         attr_reader :path
 
+        # The path to the index directory
+        #
+        # @return [Pathname]
+        attr_reader :index_dir
+
         # The stream name
         #
         # @return [String]
@@ -33,8 +38,15 @@ module Syskit::Pocolog
         # @return [Integer]
         attr_reader :size
 
-        def initialize(path, name, type, interval_rt, interval_lg, size, metadata)
+        # The realtime interval
+        attr_reader :interval_rt
+
+        # The logical-time interval
+        attr_reader :interval_lg
+
+        def initialize(path, index_dir, name, type, metadata, interval_rt, interval_lg, size)
             @path = path
+            @index_dir = index_dir
             @name = name
             @type = type
             @metadata = metadata
@@ -51,17 +63,11 @@ module Syskit::Pocolog
             type.registry
         end
 
-        def time_interval(rt = false)
-            if rt then @interval_rt
-            else @interval_lg
-            end
-        end
-
         # Method used when the stream's data is actually needed
         #
         # @return [Pocolog::DataStream]
         def syskit_eager_load
-            file = Pocolog::Logfiles.open(path)
+            file = Pocolog::Logfiles.open(path, index_dir: index_dir)
             file.streams.first
         end
     end

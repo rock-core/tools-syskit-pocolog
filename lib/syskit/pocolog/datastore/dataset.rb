@@ -55,6 +55,7 @@ module Syskit::Pocolog
                 @dataset_path = path.realpath
                 @cache_path = cache
                 @metadata = nil
+                @lazy_data_streams = nil
             end
 
             # @overload digest(string)
@@ -390,7 +391,8 @@ module Syskit::Pocolog
 
             # Enumerate the pocolog streams available in this dataset
             #
-            # @yieldparam [LazyStream] stream
+            # @yieldparam [Pocolog::Datastream] stream
+            # @see each_pocolog_lazy_stream
             def each_pocolog_stream
                 return enum_for(__method__) if !block_given?
                 pocolog_index_dir = (cache_path + "pocolog").to_s
@@ -398,6 +400,55 @@ module Syskit::Pocolog
                     logfile = Pocolog::Logfiles.open(logfile_path, index_dir: pocolog_index_dir, silent: true)
                     yield(logfile.streams.first)
                 end
+            end
+
+            # @api private
+            #
+            # Load lazy data stream information from disk
+            def read_lazy_data_streams
+                pocolog_index_dir = (cache_path + "pocolog").to_s
+                Pathname.enum_for(:glob, dataset_path + "pocolog" + "*.log").map do |logfile_path|
+                    index_path = Pocolog::Logfiles.default_index_filename(
+                        logfile_path.to_s, index_dir: pocolog_index_dir.to_s)
+                    index_path = Pathname.new(index_path)
+                    logfile_path.open do |file_io|
+                        index_path.open do |index_io|
+                            stream_info = Pocolog::Format::Current.
+                                read_minimal_stream_info(index_io, file_io)
+                            stream_block, index_stream_info = stream_info.first
+
+                            interval_rt = index_stream_info.interval_rt.map do |t|
+                                Pocolog::StreamIndex.time_from_internal(t, 0)
+                            end
+                            interval_lg = index_stream_info.interval_lg.map do |t|
+                                Pocolog::StreamIndex.time_from_internal(t, 0)
+                            end
+
+                            LazyDataStream.new(
+                                logfile_path,
+                                pocolog_index_dir,
+                                stream_block.name,
+                                stream_block.type,
+                                stream_block.metadata,
+                                interval_rt,
+                                interval_lg,
+                                index_stream_info.stream_size)
+                        end
+                    end
+                end
+            end
+
+            # Enumerate the pocolog streams available in this dataset, without
+            # loading them
+            #
+            # It relies on an index built by the datastore
+            #
+            # @yieldparam [LazyDataStream] stream
+            # @see each_pocolog_stream
+            def each_pocolog_lazy_stream
+                return enum_for(__method__) if !block_given?
+                (@lazy_data_streams ||= read_lazy_data_streams).
+                    each(&proc)
             end
         end
     end

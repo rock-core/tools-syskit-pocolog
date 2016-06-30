@@ -50,12 +50,12 @@ module Syskit::Pocolog
 
         # Time of the first sample in the aligner
         def start_time
-            stream_aligner.time_interval[0]
+            stream_aligner.interval_lg[0]
         end
 
         # Time of the last sample in the aligner
         def end_time
-            stream_aligner.time_interval[1]
+            stream_aligner.interval_lg[1]
         end
 
         # Register a deployment task

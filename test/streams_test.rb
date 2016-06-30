@@ -245,56 +245,5 @@ module Syskit::Pocolog
                 assert_equal ['/other_project'], other_task.streams.map(&:name)
             end
         end
-
-        describe "handling of normalized datasets" do
-            attr_reader :file_path
-            before do
-                @file_path, _stream = create_normalized_stream(
-                    '/task.file',
-                    metadata: Hash['rock_task_name' => "task",
-                                   'rock_task_object_name' => 'object0',
-                                   'rock_stream_type' => 'port'])
-            end
-
-            it "loads the directory's metadata" do
-                streams = Streams.from_dir(logfile_pathname)
-                assert_equal 1, streams.num_streams
-
-                datastream = streams.each_stream.first
-                assert_equal '/task.file', datastream.name
-                assert_equal '/int32_t', datastream.type.name
-                assert_equal 0, datastream.size
-                assert_equal file_path, datastream.path
-                assert_equal Hash['rock_task_name' => "task",
-                    'rock_task_object_name' => 'object0',
-                    'rock_stream_type' => 'port'], datastream.metadata
-            end
-            it "raises InvalidNormalizedDataset if a stream's file does not exist" do
-                file_path.unlink
-                assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(logfile_pathname)
-                end
-            end
-            it "raises InvalidNormalizedDataset if a stream's registry file does not exist" do
-                (logfile_pathname + "task.file.0.tlb").unlink
-                assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(logfile_pathname)
-                end
-            end
-            it "raises InvalidNormalizedDataset if a stream's file modification time changed" do
-                # Needed, timestamps are often not sub-ms
-                sleep 0.01
-                FileUtils.touch (logfile_pathname + "task.file.0.log")
-                assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(logfile_pathname)
-                end
-            end
-            it "raises InvalidNormalizedDataset if a stream's file size changed" do
-                file_path.truncate(20)
-                assert_raises(InvalidNormalizedDataset) do
-                    Streams.from_dir(logfile_pathname)
-                end
-            end
-        end
     end
 end

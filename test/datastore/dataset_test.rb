@@ -447,6 +447,61 @@ module Syskit::Pocolog
                     assert_equal ['test'], streams.map(&:name)
                 end
             end
+
+            describe "#read_lazy_data_stream" do
+                attr_reader :base_time, :double_t
+                before do
+                    @base_time = Time.at(342983, 3219)
+                    registry = Typelib::Registry.new
+                    @double_t = registry.create_numeric '/double', 8, :float
+                    create_logfile 'task0::port.0.log' do
+                        create_logfile_stream 'test', 
+                            metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port']
+                        write_logfile_sample base_time, base_time + 10, 1
+                        write_logfile_sample base_time + 1, base_time + 20, 2
+                    end
+                    create_logfile 'task0::other.0.log' do
+                        create_logfile_stream 'other_test', 
+                            metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'other'],
+                            type: double_t
+                        write_logfile_sample base_time + 100, base_time + 300, 3
+                    end
+                    cache_path.mkpath
+                    open_logfile logfile_path('task0::port.0.log'), index_dir: (cache_path + "pocolog").to_s
+                    open_logfile logfile_path('task0::other.0.log'), index_dir: (cache_path + "pocolog").to_s
+                end
+
+                it "loads stream information and returns LazyDataStream objects" do
+                    streams = dataset.read_lazy_data_streams
+                    assert_equal ['test', 'other_test'], streams.map(&:name)
+                    assert_equal [int32_t, double_t], streams.map(&:type)
+                    assert_equal [Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port'],
+                                  Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'other']],
+                        streams.map(&:metadata)
+                    assert_equal [[base_time, base_time + 1], [base_time + 100, base_time + 100]],
+                        streams.map(&:interval_rt)
+                    assert_equal [[base_time + 10, base_time + 20], [base_time + 300, base_time + 300]],
+                        streams.map(&:interval_lg)
+                    assert_equal [2, 1], streams.map(&:size)
+                end
+
+                it "sets up the lazy data stream to load the actual stream properly" do
+                    lazy_streams = dataset.read_lazy_data_streams
+                    flexmock(Pocolog::Logfiles).new_instances.
+                        should_receive(:rebuild_and_load_index).never
+                    streams = lazy_streams.map(&:syskit_eager_load)
+                    assert_equal ['test', 'other_test'], streams.map(&:name)
+                    assert_equal [int32_t, double_t], streams.map(&:type)
+                    assert_equal [Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port'],
+                                  Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'other']],
+                        streams.map(&:metadata)
+                    assert_equal [[base_time, base_time + 1], [base_time + 100, base_time + 100]],
+                        streams.map(&:interval_rt)
+                    assert_equal [[base_time + 10, base_time + 20], [base_time + 300, base_time + 300]],
+                        streams.map(&:interval_lg)
+                    assert_equal [2, 1], streams.map(&:size)
+                end
+            end
         end
     end
 end

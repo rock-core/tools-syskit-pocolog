@@ -26,6 +26,13 @@ module Syskit::Pocolog
             Pathname.new(logfile_path(*basename))
         end
 
+        def create_dataset(digest)
+            core_path = datastore.core_path_of(digest)
+            core_path.mkpath
+            move_logfile_path(core_path + "pocolog")
+            Datastore::Dataset.new(core_path, cache: datastore.cache_path_of(digest))
+        end
+
         # Create a stream in a normalized dataset
         def create_normalized_stream(name, type: int32_t, metadata: Hash.new)
             logfile_basename = name.gsub('/', ':').gsub(/^:/, '') + ".0.log"
