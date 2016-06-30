@@ -5,6 +5,7 @@ require 'roby/cli/base'
 require 'syskit/pocolog'
 require 'syskit/pocolog/datastore/normalize'
 require 'syskit/pocolog/datastore/import'
+require 'syskit/pocolog/datastore/index_build'
 require 'tty-progressbar'
 require 'pocolog/cli/null_reporter'
 require 'pocolog/cli/tty_reporter'
@@ -113,6 +114,25 @@ module Syskit::Pocolog
                             $stderr.puts pastel.yellow("#{p} lasts only %.1fs, ignored" % [stream_duration])
                         end
                     end
+                end
+            end
+
+            desc 'index DATASTORE_PATH [DATASETS]', 'refreshes or rebuilds (with --force) the datastore indexes'
+            method_option :force, desc: 'force rebuilding even indexes that look up-to-date',
+                type: :boolean, default: false
+            method_option :silent, desc: 'suppress output',
+                type: :boolean, default: false
+            def index(datastore_path, *dataset_digests)
+                datastore_path = Pathname.new(datastore_path).realpath
+                store = Syskit::Pocolog::Datastore.new(datastore_path)
+                datasets =
+                    if dataset_digests.empty?
+                        store.each_dataset.to_a
+                    else
+                        dataset_digests.map { |d| store.get(d) }
+                    end
+                datasets.each do |d|
+                    Syskit::Pocolog::Datastore.index_build(store, d, force: options[:force])
                 end
             end
         end

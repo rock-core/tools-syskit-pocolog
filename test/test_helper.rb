@@ -26,11 +26,25 @@ module Syskit::Pocolog
             Pathname.new(logfile_path(*basename))
         end
 
+        def create_datastore(path)
+            @datastore = Datastore.create(path)
+        end
+
         def create_dataset(digest)
-            core_path = datastore.core_path_of(digest)
+            if !@datastore
+                raise ArgumentError, "must call #create_datastore before #create_dataset"
+            end
+
+            core_path = @datastore.core_path_of(digest)
             core_path.mkpath
-            move_logfile_path(core_path + "pocolog")
-            Datastore::Dataset.new(core_path, cache: datastore.cache_path_of(digest))
+            move_logfile_path(core_path + "pocolog", delete_current: false)
+            dataset = Datastore::Dataset.new(core_path, cache: @datastore.cache_path_of(digest))
+            begin
+                yield
+            ensure
+                identity = dataset.compute_dataset_identity_from_files
+                dataset.write_dataset_identity_to_metadata_file(identity)
+            end
         end
 
         # Create a stream in a normalized dataset

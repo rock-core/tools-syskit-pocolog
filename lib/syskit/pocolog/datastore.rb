@@ -32,6 +32,17 @@ module Syskit::Pocolog
             core_path_of(digest).exist?
         end
 
+        # Enumerate the store's datasets
+        def each_dataset
+            return enum_for(__method__) if !block_given?
+            core_path = (datastore_path + "core")
+            core_path.each_entry do |dataset_path|
+                if Dataset.dataset?(core_path + dataset_path)
+                    yield(get(dataset_path.to_s))
+                end
+            end
+        end
+
         # Remove an existing dataset
         def delete(digest)
             core_path_of(digest).rmtree

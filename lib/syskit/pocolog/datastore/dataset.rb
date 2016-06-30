@@ -58,6 +58,11 @@ module Syskit::Pocolog
                 @lazy_data_streams = nil
             end
 
+            # Whether there is a dataset at this path
+            def self.dataset?(path)
+                (path + BASENAME_IDENTITY_METADATA).exist?
+            end
+
             # @overload digest(string)
             #   Computes the digest of a string
             #
