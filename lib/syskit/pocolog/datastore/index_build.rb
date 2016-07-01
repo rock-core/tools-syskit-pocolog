@@ -2,8 +2,8 @@ require 'roby/droby/logfile/index'
 
 module Syskit::Pocolog
     class Datastore
-        def self.index_build(datastore, dataset, force: false)
-            IndexBuild.new(datastore, dataset).rebuild(force: force)
+        def self.index_build(datastore, dataset, force: false, reporter: Pocolog::CLI::NullReporter.new)
+            IndexBuild.new(datastore, dataset).rebuild(force: force, reporter: reporter)
         end
 
         # Builds the index information for a given dataset in a store
@@ -22,9 +22,9 @@ module Syskit::Pocolog
             end
 
             # Rebuild this dataset's indexes
-            def rebuild(force: false)
-                rebuild_pocolog_indexes(force: force)
-                rebuild_roby_index(force: force)
+            def rebuild(force: false, reporter: Pocolog::CLI::NullReporter.new)
+                rebuild_pocolog_indexes(force: force, reporter: reporter)
+                rebuild_roby_index(force: force, reporter: reporter)
             end
 
             # Rebuild the dataset's pocolog indexes
@@ -32,7 +32,7 @@ module Syskit::Pocolog
             # @param [Boolean] force if true, the indexes will all be rebuilt.
             #   Otherwise, only the indexes that do not seem to be up-to-date
             #   will.
-            def rebuild_pocolog_indexes(force: false)
+            def rebuild_pocolog_indexes(force: false, reporter: Pocolog::CLI::NullReporter.new)
                 pocolog_index_dir = (dataset.cache_path + "pocolog")
                 pocolog_index_dir.mkpath
                 if force
@@ -46,7 +46,7 @@ module Syskit::Pocolog
             end
 
             # Rebuild the dataset's Roby index
-            def rebuild_roby_index(force: false)
+            def rebuild_roby_index(force: false, reporter: Pocolog::CLI::NullReporter.new)
                 dataset.cache_path.mkpath
                 roby_log_path   = dataset.dataset_path + "roby-events.log"
                 if !roby_log_path.exist?
@@ -55,7 +55,14 @@ module Syskit::Pocolog
 
                 roby_index_path = dataset.cache_path + "roby-events.idx"
                 if force || !Roby::DRoby::Logfile::Index.valid_file?(roby_log_path, roby_index_path)
-                    Roby::DRoby::Logfile::Index.rebuild_file(roby_log_path, roby_index_path)
+                    reporter.log "  rebuilding: roby-events.log"
+                    begin
+                        Roby::DRoby::Logfile::Index.rebuild_file(roby_log_path, roby_index_path)
+                    rescue Roby::DRoby::Logfile::InvalidFormatVersion
+                        reporter.warn "  roby-events.log is an obsolete Roby log file format, skipping"
+                    end
+                else
+                    reporter.log "  up-to-date: roby-events.log"
                 end
             end
         end

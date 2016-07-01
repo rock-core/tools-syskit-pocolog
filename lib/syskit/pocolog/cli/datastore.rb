@@ -137,24 +137,20 @@ module Syskit::Pocolog
                     paths = [root_path]
                 end
 
-                pastel = Pastel.new
+                reporter = create_reporter(silent: options[:silent])
 
                 datastore_path = Pathname.new(datastore_path)
                 datastore = Syskit::Pocolog::Datastore.create(datastore_path)
                 paths.each do |p|
-                    if !options[:silent]
-                        $stderr.puts pastel.bold("Processing #{p}")
-                    end
+                    reporter.title "Processing #{p}"
 
                     last_import_digest, last_import_time = Syskit::Pocolog::Datastore::Import.find_import_info(p)
                     already_imported = (last_import_digest && datastore.has?(last_import_digest))
                     if already_imported && !options[:force]
-                        if !options[:silent]
-                            $stderr.puts pastel.yellow("#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again")
-                            next
-                        end
+                        reporter.info "#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again"
+                        next
                     end
-
+                    
                     datastore.in_incoming do |core_path, cache_path|
                         importer = Syskit::Pocolog::Datastore::Import.new(datastore)
                         dataset = importer.normalize_dataset(p, core_path, cache_path: cache_path, silent: options[:silent])
@@ -166,7 +162,7 @@ module Syskit::Pocolog
                         if already_imported
                             # --force is implied as otherwise we would have
                             # skipped earlier
-                            $stderr.puts pastel.yellow("#{p} seem to have already been imported but --force is given, overwriting")
+                            reporter.info "#{p} seem to have already been imported but --force is given, overwriting"
                             datastore.delete(last_import_digest)
                         end
 
@@ -174,10 +170,10 @@ module Syskit::Pocolog
                             begin
                                 importer.move_dataset_to_store(p, dataset, force: options[:force], silent: options[:silent])
                             rescue Syskit::Pocolog::Datastore::Import::DatasetAlreadyExists
-                                $stderr.puts pastel.yellow("#{p} already seem to have been imported as #{dataset.compute_dataset_digest}. Give --force to import again")
+                                reporter.info "#{p} already seem to have been imported as #{dataset.compute_dataset_digest}. Give --force to import again"
                             end
-                        elsif !options[:silent]
-                            $stderr.puts pastel.yellow("#{p} lasts only %.1fs, ignored" % [stream_duration])
+                        else
+                            reporter.info "#{p} lasts only %.1fs, ignored" % [stream_duration]
                         end
                     end
                 end
@@ -197,8 +193,16 @@ module Syskit::Pocolog
                     else
                         dataset_digests.map { |d| store.get(d) }
                     end
+                reporter =
+                    if options[:silent]
+                        Pocolog::CLI::NullReporter.new
+                    else
+                        Pocolog::CLI::TTYReporter.new("")
+                    end
+                pastel = Pastel.new
                 datasets.each do |d|
-                    Syskit::Pocolog::Datastore.index_build(store, d, force: options[:force])
+                    reporter.title "Processing #{d.compute_dataset_digest}"
+                    Syskit::Pocolog::Datastore.index_build(store, d, force: options[:force], reporter: reporter)
                 end
             end
 

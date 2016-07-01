@@ -117,6 +117,16 @@ module Syskit::Pocolog
                         dataset_path + "roby-events.log",
                         cache_path + "roby-events.idx")
                 end
+                it "skips the roby file if its format is not current" do
+                    (dataset_path + "roby-events.log").open('w') do |io|
+                        Roby::DRoby::Logfile.write_header(io, version: 0)
+                    end
+                    reporter = flexmock(Pocolog::CLI::NullReporter.new)
+                    reporter.should_receive(:warn).once.
+                        with(/roby-events.log is an obsolete Roby log file format, skipping/)
+
+                    index_build.rebuild_roby_index(reporter: reporter)
+                end
             end
         end
     end

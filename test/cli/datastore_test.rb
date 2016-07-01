@@ -20,6 +20,15 @@ module Syskit::Pocolog
                 root_path.rmtree
             end
 
+            def capture_io
+                FlexMock.use(TTY::Color) do |tty_color|
+                    tty_color.should_receive(:color?).and_return(false)
+                    super do
+                        yield
+                    end
+                end
+            end
+
             # Helper method to call a CLI subcommand
             def call_cli(*args, silent: true)
                 extra_args = Array.new
@@ -225,18 +234,18 @@ module Syskit::Pocolog
                 it "runs the indexer on all datasets of the store if none are provided on the command line" do
                     flexmock(Syskit::Pocolog::Datastore).
                         should_receive(:index_build).
-                        with(expected_store, expected_dataset('A'), force: false).once.
+                        with(expected_store, expected_dataset('A'), Hash).once.
                         pass_thru
                     flexmock(Syskit::Pocolog::Datastore).
                         should_receive(:index_build).
-                        with(expected_store, expected_dataset('B'), force: false).once.
+                        with(expected_store, expected_dataset('B'), Hash).once.
                         pass_thru
                     call_cli('index', datastore_path.to_s)
                 end
                 it "runs the indexer on the datasets of the store specified on the command line" do
                     flexmock(Syskit::Pocolog::Datastore).
                         should_receive(:index_build).
-                        with(expected_store, expected_dataset('A'), force: false).once.
+                        with(expected_store, expected_dataset('A'), Hash).once.
                         pass_thru
                     call_cli('index', datastore_path.to_s, 'A')
                 end
