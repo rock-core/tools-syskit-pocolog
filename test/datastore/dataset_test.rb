@@ -472,6 +472,13 @@ module Syskit::Pocolog
                 end
             end
 
+            describe "#each_pocolog_path" do
+                it "enumerates the pocolog files in the dataset" do
+                    paths = dataset.each_pocolog_path.to_a
+                    assert_equal [logfile_pathname('task0::port.0.log')], paths
+                end
+            end
+
             describe "#each_pocolog_stream" do
                 it "expects the pocolog cache files in the dataset's cache directory" do
                     cache_path.mkpath

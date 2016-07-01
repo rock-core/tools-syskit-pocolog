@@ -39,8 +39,9 @@ module Syskit::Pocolog
                     pocolog_index_dir = (dataset.cache_path + "pocolog")
                     open_logfile('task::port.0.log', index_dir: pocolog_index_dir).close
                     index_contents = (pocolog_index_dir + "task::port.0.idx").read
-                    flexmock(Pocolog::Logfiles).new_instances.
-                        should_receive(:rebuild_and_load_index).never
+                    flexmock(Pocolog::Format::Current).
+                        should_receive(:rebuild_index_file).
+                        never
 
                     index_build.rebuild_pocolog_indexes
                     assert_equal index_contents, (dataset.cache_path + "pocolog" + "task::port.0.idx").read
@@ -49,10 +50,11 @@ module Syskit::Pocolog
                     pocolog_index_dir = (dataset.cache_path + "pocolog")
                     open_logfile('task::port.0.log', index_dir: pocolog_index_dir).close
                     flexmock(Pocolog::Format::Current).
-                        should_receive(:read_index).once.
+                        should_receive(:read_index_stream_info).once.
                         and_raise(Pocolog::InvalidIndex)
-                    flexmock(Pocolog::Logfiles).new_instances.
-                        should_receive(:rebuild_and_load_index).once.pass_thru
+                    flexmock(Pocolog::Format::Current).
+                        should_receive(:rebuild_index_file).
+                        once.pass_thru
 
                     index_build.rebuild_pocolog_indexes
                 end
@@ -60,15 +62,17 @@ module Syskit::Pocolog
                     pocolog_index_dir = (dataset.cache_path + "pocolog")
                     open_logfile('task::port.0.log', index_dir: pocolog_index_dir).close
                     index_contents = (pocolog_index_dir + "task::port.0.idx").read
-                    flexmock(Pocolog::Logfiles).new_instances.
-                        should_receive(:rebuild_and_load_index).once.pass_thru
+                    flexmock(Pocolog::Format::Current).
+                        should_receive(:rebuild_index_file).
+                        once.pass_thru
 
                     index_build.rebuild_pocolog_indexes(force: true)
                     assert_equal index_contents, (dataset.cache_path + "pocolog" + "task::port.0.idx").read
                 end
                 it "creates a new index file if none exists" do
-                    flexmock(Pocolog::Logfiles).new_instances.
-                        should_receive(:rebuild_and_load_index).once.pass_thru
+                    flexmock(Pocolog::Format::Current).
+                        should_receive(:rebuild_index_file).
+                        once.pass_thru
                     index_build.rebuild_pocolog_indexes(force: true)
                     assert (dataset.cache_path + "pocolog" + "task::port.0.idx").exist?
                 end

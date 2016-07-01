@@ -416,6 +416,13 @@ module Syskit::Pocolog
                 end
             end
 
+            def each_pocolog_path
+                return enum_for(__method__) if !block_given?
+                Pathname.glob(dataset_path + 'pocolog' + "*.log") do |logfile_path|
+                    yield(logfile_path)
+                end
+            end
+
             # Enumerate the pocolog streams available in this dataset
             #
             # @yieldparam [Pocolog::Datastream] stream
@@ -423,7 +430,7 @@ module Syskit::Pocolog
             def each_pocolog_stream
                 return enum_for(__method__) if !block_given?
                 pocolog_index_dir = (cache_path + "pocolog").to_s
-                Pathname.glob(dataset_path + 'pocolog' + "*.log") do |logfile_path|
+                each_pocolog_path do |logfile_path|
                     logfile = Pocolog::Logfiles.open(logfile_path, index_dir: pocolog_index_dir, silent: true)
                     yield(logfile.streams.first)
                 end

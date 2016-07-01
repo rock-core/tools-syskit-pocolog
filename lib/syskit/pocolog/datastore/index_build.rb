@@ -42,7 +42,27 @@ module Syskit::Pocolog
                     end
                 end
 
-                dataset.each_pocolog_stream.to_a
+                dataset.each_pocolog_path do |logfile_path|
+                    logfile_name = logfile_path.relative_path_from(dataset.dataset_path)
+                    begin
+                        index_path = Pocolog::Logfiles.default_index_filename(
+                            logfile_path, index_dir: pocolog_index_dir)
+
+                        stat = logfile_path.stat
+                        begin
+                            File.open(index_path) do |index_io|
+                                Pocolog::Format::Current.read_index_stream_info(index_io, expected_file_size: stat.size)
+                            end
+                            reporter.log "  up-to-date: #{logfile_name}"
+
+                        rescue Errno::ENOENT, Pocolog::InvalidIndex => e
+                            reporter.log "  rebuilding: #{logfile_name}"
+                            logfile_path.open do |logfile_io|
+                                Pocolog::Format::Current.rebuild_index_file(logfile_io, index_path)
+                            end
+                        end
+                    end
+                end
             end
 
             # Rebuild the dataset's Roby index
