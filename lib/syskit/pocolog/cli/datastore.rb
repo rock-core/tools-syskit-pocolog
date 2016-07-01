@@ -184,15 +184,9 @@ module Syskit::Pocolog
                 type: :boolean, default: false
             method_option :silent, desc: 'suppress output',
                 type: :boolean, default: false
-            def index(datastore_path, *dataset_digests)
-                datastore_path = Pathname.new(datastore_path).realpath
-                store = Syskit::Pocolog::Datastore.new(datastore_path)
-                datasets =
-                    if dataset_digests.empty?
-                        store.each_dataset.to_a
-                    else
-                        dataset_digests.map { |d| store.get(d) }
-                    end
+            def index(datastore_path, *datasets)
+                store = open_store(datastore_path)
+                datasets = resolve_datasets(store, *datasets)
                 reporter =
                     if options[:silent]
                         Pocolog::CLI::NullReporter.new

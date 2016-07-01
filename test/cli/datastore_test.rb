@@ -215,10 +215,10 @@ module Syskit::Pocolog
 
             describe "#index" do
                 before do
-                    create_dataset "A" do
+                    create_dataset "a" do
                         create_logfile('test.0.log') {}
                     end
-                    create_dataset "B" do
+                    create_dataset "b" do
                         create_logfile('test.0.log') {}
                     end
                 end
@@ -234,20 +234,20 @@ module Syskit::Pocolog
                 it "runs the indexer on all datasets of the store if none are provided on the command line" do
                     flexmock(Syskit::Pocolog::Datastore).
                         should_receive(:index_build).
-                        with(expected_store, expected_dataset('A'), Hash).once.
+                        with(expected_store, expected_dataset('a'), Hash).once.
                         pass_thru
                     flexmock(Syskit::Pocolog::Datastore).
                         should_receive(:index_build).
-                        with(expected_store, expected_dataset('B'), Hash).once.
+                        with(expected_store, expected_dataset('b'), Hash).once.
                         pass_thru
                     call_cli('index', datastore_path.to_s)
                 end
                 it "runs the indexer on the datasets of the store specified on the command line" do
                     flexmock(Syskit::Pocolog::Datastore).
                         should_receive(:index_build).
-                        with(expected_store, expected_dataset('A'), Hash).once.
+                        with(expected_store, expected_dataset('a'), Hash).once.
                         pass_thru
-                    call_cli('index', datastore_path.to_s, 'A')
+                    call_cli('index', datastore_path.to_s, 'a')
                 end
             end
 
