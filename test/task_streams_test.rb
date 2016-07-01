@@ -161,6 +161,18 @@ module Syskit::Pocolog
                 assert_equal expected, ports
             end
         end
+
+        describe "#each_property_stream" do
+            it "enumerates the streams that are a task's property" do
+                ports = subject.each_property_stream.
+                    map { |name, stream| [name, stream.name] }.to_set
+                expected = Set[
+                    ['object0', '/property0'],
+                    ['object1', '/property1_1'],
+                    ['object1', '/property1_2']]
+                assert_equal expected, ports
+            end
+        end
     end
 end
 

@@ -56,6 +56,20 @@ module Syskit::Pocolog
             end
         end
 
+        # Enumerate the streams that are properties
+        #
+        # @yieldparam [String] property_name the name of the property
+        # @yieldparam [Pocolog::DataStream] stream the data stream
+        def each_property_stream
+            return enum_for(__method__) if !block_given?
+
+            streams.each do |s|
+                if (s.metadata['rock_stream_type'] == 'property') && (port_name = s.metadata['rock_task_object_name'])
+                    yield(port_name, s)
+                end
+            end
+        end
+
         # Find a port stream that matches the given name
         def find_port_by_name(name)
             objects = find_all_streams(RockStreamMatcher.new.ports.object_name(name))
