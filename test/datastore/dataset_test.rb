@@ -213,19 +213,21 @@ module Syskit::Pocolog
                 end
                 it "validates that the file's has an 'identity' field" do
                     (dataset_path + Dataset::BASENAME_IDENTITY_METADATA).open('w') do |io|
-                        io.write YAML.dump(Hash[])
+                        io.write YAML.dump(Hash['layout_version' => Dataset::LAYOUT_VERSION])
                     end
-                    assert_raises(Dataset::InvalidIdentityMetadata) do
+                    e = assert_raises(Dataset::InvalidIdentityMetadata) do
                         dataset.read_dataset_identity_from_metadata_file
                     end
+                    assert_match /no 'identity' field/, e.message
                 end
                 it "validates that the file's 'identity' field is an array" do
                     (dataset_path + Dataset::BASENAME_IDENTITY_METADATA).open('w') do |io|
-                        io.write YAML.dump(Hash['identity' => Hash.new])
+                        io.write YAML.dump(Hash['layout_version' => Dataset::LAYOUT_VERSION, 'identity' => Hash.new])
                     end
-                    assert_raises(Dataset::InvalidIdentityMetadata) do
+                    e = assert_raises(Dataset::InvalidIdentityMetadata) do
                         dataset.read_dataset_identity_from_metadata_file
                     end
+                    assert_match /the 'identity' field.*is not an array/, e.message
                 end
                 it "validates that the 'path' field contains a string" do
                     write_metadata('path' => 10)

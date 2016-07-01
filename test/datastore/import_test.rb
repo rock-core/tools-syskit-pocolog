@@ -34,6 +34,14 @@ module Syskit::Pocolog
                     FileUtils.touch(path = logfile_pathname('test-events.log'))
                     assert_equal [[], [], path, []], import.prepare_import(logfile_pathname)
                 end
+                it "raises if more than one file looks like a roby log file" do
+                    FileUtils.touch(logfile_pathname('test-events.log'))
+                    FileUtils.touch(logfile_pathname('test2-events.log'))
+                    e = assert_raises(ArgumentError) do
+                        import.prepare_import(logfile_pathname)
+                    end
+                    assert_match "more than one Roby event log found", e.message
+                end
                 it "ignores pocolog's index files" do
                     FileUtils.touch(path = logfile_pathname('file0.1.log'))
                     FileUtils.touch(logfile_pathname('file0.1.idx'))
@@ -146,6 +154,18 @@ module Syskit::Pocolog
                     end
                     import_dir = import.import(logfile_pathname, silent: true)
                     assert_equal Hash['roby:app_name' => Set['test']], Dataset.new(import_dir).metadata
+                end
+                it "ignores the Roby metadata if it cannot be loaded" do
+                    logfile_pathname("info.yml").open('w') do |io|
+                        io.write "%invalid_yaml"
+                    end
+                    
+                    import_dir = nil
+                    _out, err = capture_io do
+                        import_dir = import.import(logfile_pathname, silent: true)
+                    end
+                    assert_match /failed to load Roby metadata/, err
+                    assert_equal Hash[], Dataset.new(import_dir).metadata
                 end
             end
 
