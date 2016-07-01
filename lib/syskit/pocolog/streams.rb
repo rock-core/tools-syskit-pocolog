@@ -147,67 +147,6 @@ module Syskit::Pocolog
             end
         end
 
-        # @api private
-        #
-        # Update the metadata information stored within a given path
-        def self.update_normalized_metadata(path)
-            metadata_path = path + Streams::METADATA_BASENAME
-            if metadata_path.exist?
-                metadata = YAML.load(metadata_path.read)
-            else
-                metadata = Array.new
-            end
-            yield(metadata)
-            metadata_path.open('w') do |io|
-                YAML.dump(metadata, io)
-            end
-        end
-
-        # @api private
-        #
-        # Save a stream's registry in a normalized dataset, and returns the
-        # registry's checksum
-        #
-        # @param [Pathname] stream_path the path to the stream's backing file
-        # @param [Pocolog::DataStream] stream the stream
-        # @return [String] the registry's checksum
-        def self.save_registry_in_normalized_dataset(stream_path, stream)
-            dir, basename = stream_path.split
-            stream_tlb = dir + "#{basename.basename('.log')}.tlb"
-            if stream_tlb == stream_path
-                raise ArgumentError, "cannot save the stream registry in #{stream_tlb}, it would overwrite the stream itself"
-            end
-            registry_xml = stream.type.to_xml
-            stream_tlb.open('w') do |io|
-                io.write registry_xml
-            end
-            Digest::SHA256.base64digest(registry_xml)
-        end
-
-        # @api private
-        #
-        # Create an entry suitable for marshalling in the metadata file for a
-        # given stream
-        #
-        # @param [Pathname] stream_path the path to the stream's backing file
-        # @param [Pocolog::DataStream] stream the stream
-        # @return [Hash]
-        def self.create_metadata_entry(stream_path, stream, registry_checksum)
-            entry = Hash.new
-            entry['path'] = stream_path.realpath.to_s
-            entry['file_size'] = stream_path.stat.size
-            entry['file_mtime'] = stream_path.stat.mtime
-            entry['registry_sha256'] = registry_checksum
-
-            entry['name'] = stream.name
-            entry['type'] = stream.type.name
-            entry['interval_rt'] = stream.interval_rt
-            entry['interval_lg'] = stream.interval_lg
-            entry['stream_size'] = stream.size
-            entry['metadata'] = stream.metadata
-            entry
-        end
-
         # Returns the normalized basename for the given stream
         #
         # @param [Pocolog::DataStream] stream
