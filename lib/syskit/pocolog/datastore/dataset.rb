@@ -484,6 +484,22 @@ module Syskit::Pocolog
                 (@lazy_data_streams ||= read_lazy_data_streams).
                     each(&proc)
             end
+
+            # Enumerate the streams per task
+            #
+            # @yieldparam [TaskStreams]
+            #
+            # @param (see Streams#each_task)
+            def each_task(load_models: true, skip_tasks_without_models: true, raise_on_missing_task_models: false, loader: Roby.app.default_loader, &block)
+                if !block_given?
+                    return enum_for(__method__, load_models: load_models,
+                                    skip_tasks_without_models: skip_tasks_without_models,
+                                    raise_on_missing_task_models: raise_on_missing_task_models,
+                                    loader: loader) 
+                end
+                Streams.new(each_pocolog_lazy_stream.to_a).
+                    each_task(load_models: load_models, skip_tasks_without_models: skip_tasks_without_models, raise_on_missing_task_models: raise_on_missing_task_models, &block)
+            end
         end
     end
 end

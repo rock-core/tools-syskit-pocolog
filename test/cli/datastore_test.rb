@@ -252,30 +252,43 @@ module Syskit::Pocolog
             end
 
             describe "#list" do
-                attr_reader :show_a0fa, :show_a0ga
+                attr_reader :show_a0ea, :show_a0fa, :base_time
                 before do
-                    create_dataset "a0fa", metadata: Hash['description' => 'first', 'test' => ['2'], 'array_test' => ['a', 'b']] do
-                        create_logfile('test.0.log') {}
+                    @base_time = Time.at(34200, 234)
+                    create_dataset "a0ea", metadata: Hash['description' => 'first', 'test' => ['2'], 'array_test' => ['a', 'b']] do
+                        create_logfile('test.0.log') do
+                            create_logfile_stream 'test', metadata: Hash['rock_stream_type' => 'port', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'port0', 'rock_task_model' => 'test::Task']
+                            write_logfile_sample base_time, base_time, 0
+                            write_logfile_sample base_time + 1, base_time + 10, 1
+                        end
+                        create_logfile('test_property.0.log') do
+                            create_logfile_stream 'test_property', metadata: Hash['rock_stream_type' => 'property', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'property0', 'rock_task_model' => 'test::Task']
+                            write_logfile_sample base_time, base_time + 1, 2
+                            write_logfile_sample base_time + 1, base_time + 9, 3
+                        end
                     end
-                    create_dataset "a0ga", metadata: Hash['test' => ['1'], 'array_test' => ['c', 'd']] do
-                        create_logfile('test.0.log') {}
+                    create_dataset "a0fa", metadata: Hash['test' => ['1'], 'array_test' => ['c', 'd']] do
+                        create_logfile('test.0.log') do
+                            create_logfile_stream 'test', metadata: Hash['rock_stream_type' => 'port', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'port0', 'rock_task_model' => 'test::Task']
+                        end
+                        create_logfile('test_property.0.log') do
+                            create_logfile_stream 'test_property', metadata: Hash['rock_stream_type' => 'property', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'property0', 'rock_task_model' => 'test::Task']
+                        end
                     end
-                    @show_a0fa = <<-EOF
-a0fa first
+                    @show_a0ea = <<-EOF
+a0ea first
   test: 2
   array_test:
   - a
   - b
                     EOF
-                    @show_a0ga = <<-EOF
-a0ga <no description>
+                    @show_a0fa = <<-EOF
+a0fa <no description>
   test: 1
   array_test:
   - c
   - d
                     EOF
-
-
                 end
 
                 it "raises if the query is invalid" do
@@ -288,7 +301,7 @@ a0ga <no description>
                     out, _err = capture_io do
                         call_cli('list', datastore_path.to_s, silent: false)
                     end
-                    assert_equal [show_a0fa, show_a0ga].join, out
+                    assert_equal [show_a0ea, show_a0fa].join, out
                 end
                 it "lists only the short digests if --digest is given" do
                     out, _err = capture_io do
@@ -304,30 +317,61 @@ a0ga <no description>
                 end
                 it "accepts a digest prefix as argument" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, 'a0f', silent: false)
+                        call_cli('list', datastore_path.to_s, 'a0e', silent: false)
                     end
-                    assert_equal show_a0fa, out
+                    assert_equal show_a0ea, out
                 end
                 it "can match metadata exactly" do
                     out, _err = capture_io do
                         call_cli('list', datastore_path.to_s, 'test=1', silent: false)
                     end
-                    assert_equal show_a0ga, out
+                    assert_equal show_a0fa, out
                 end
                 it "can match metadata with a regexp" do
                     out, _err = capture_io do
                         call_cli('list', datastore_path.to_s, 'array_test~[ac]', silent: false)
                     end
-                    assert_equal [show_a0fa, show_a0ga].join, out
+                    assert_equal [show_a0ea, show_a0fa].join, out
+                end
+
+                describe "--pocolog" do
+                    it "shows the pocolog stream information" do
+                        out, _err = capture_io do
+                            call_cli('list', datastore_path.to_s, 'a0e', '--pocolog', silent: false)
+                        end
+                        pocolog_info =<<-EOF
+  1 oroGen tasks in 2 streams
+    task0[test::Task]: 1 ports and 1 properties
+    Ports:
+      port0:     2 samples from 1970-01-01 06:30:00.000234 -0300 to 1970-01-01 06:30:10.000234 -0300 [   0:00:10.000000]
+    Properties:
+      property0: 2 samples from 1970-01-01 06:30:01.000234 -0300 to 1970-01-01 06:30:09.000234 -0300 [   0:00:08.000000]
+                        EOF
+                        assert_equal (show_a0ea + pocolog_info), out
+                    end
+                    it "handles empty streams gracefully" do
+                        out, _err = capture_io do
+                            call_cli('list', datastore_path.to_s, 'a0f', '--pocolog', silent: false)
+                        end
+                        pocolog_info =<<-EOF
+  1 oroGen tasks in 2 streams
+    task0[test::Task]: 1 ports and 1 properties
+    Ports:
+      port0:     empty
+    Properties:
+      property0: empty
+                        EOF
+                        assert_equal (show_a0fa + pocolog_info), out
+                    end
                 end
             end
 
             describe "#metadata" do
                 before do
-                    create_dataset "a0fa", metadata: Hash['test' => ['a']] do
+                    create_dataset "a0ea", metadata: Hash['test' => ['a']] do
                         create_logfile('test.0.log') {}
                     end
-                    create_dataset "a0ga", metadata: Hash['test' => ['b']] do
+                    create_dataset "a0fa", metadata: Hash['test' => ['b']] do
                         create_logfile('test.0.log') {}
                     end
                 end
@@ -340,38 +384,38 @@ a0ga <no description>
 
                 describe '--set' do
                     it "sets metadata on the given dataset" do
-                        call_cli('metadata', datastore_path.to_s, 'a0f', '--set', 'debug=true', silent: false)
-                        assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
-                        assert_nil datastore.get('a0ga').metadata['debug']
+                        call_cli('metadata', datastore_path.to_s, 'a0e', '--set', 'debug=true', silent: false)
+                        assert_equal Set['true'], datastore.get('a0ea').metadata['debug']
+                        assert_nil datastore.get('a0fa').metadata['debug']
                     end
                     it "sets metadata on matching datasets" do
                         call_cli('metadata', datastore_path.to_s, 'test=b', '--set', 'debug=true', silent: false)
-                        assert_nil datastore.get('a0fa').metadata['debug']
-                        assert_equal Set['true'], datastore.get('a0ga').metadata['debug']
+                        assert_nil datastore.get('a0ea').metadata['debug']
+                        assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
                     end
                     it "sets metadata on all datasets if no query is given" do
                         call_cli('metadata', datastore_path.to_s, '--set', 'debug=true', silent: false)
+                        assert_equal Set['true'], datastore.get('a0ea').metadata['debug']
                         assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
-                        assert_equal Set['true'], datastore.get('a0ga').metadata['debug']
                     end
                     it "collects all set arguments with the same key" do
                         call_cli('metadata', datastore_path.to_s, '--set', 'test=a', 'test=b', 'test=c', silent: false)
-                        assert_equal Set['a', 'b', 'c'], datastore.get('a0fa').metadata['test']
+                        assert_equal Set['a', 'b', 'c'], datastore.get('a0ea').metadata['test']
                     end
                     it "raises if the argument to set is not a key=value association" do
                         assert_raises(ArgumentError) do
-                            call_cli('metadata', datastore_path.to_s, 'a0fa', '--set', 'debug', silent: false)
+                            call_cli('metadata', datastore_path.to_s, 'a0ea', '--set', 'debug', silent: false)
                         end
                     end
                 end
 
                 describe '--get' do
                     it "lists all metadata on all datasets if no query is given" do
-                        call_cli('metadata', datastore_path.to_s, 'a0fa', '--set', 'test=a,b', silent: false)
+                        call_cli('metadata', datastore_path.to_s, 'a0ea', '--set', 'test=a,b', silent: false)
                         out, _err = capture_io do
                             call_cli('metadata', datastore_path.to_s, '--get', silent: false)
                         end
-                        assert_equal "a0fa test=a,b\na0ga test=b\n", out
+                        assert_equal "a0ea test=a,b\na0fa test=b\n", out
                     end
                     it "displays the short digest by default" do
                         flexmock(Syskit::Pocolog::Datastore).new_instances.should_receive(:short_digest).
@@ -379,39 +423,39 @@ a0ga <no description>
                         out, _err = capture_io do
                             call_cli('metadata', datastore_path.to_s, '--get', silent: false)
                         end
-                        assert_equal "a0f test=a\na0g test=b\n", out
+                        assert_equal "a0e test=a\na0f test=b\n", out
                     end
                     it "displays the long digest if --long-digest is given" do
                         flexmock(datastore).should_receive(:short_digest).never
                         out, _err = capture_io do
                             call_cli('metadata', datastore_path.to_s, '--get', '--long-digest', silent: false)
                         end
-                        assert_equal "a0fa test=a\na0ga test=b\n", out
+                        assert_equal "a0ea test=a\na0fa test=b\n", out
                     end
                     it "lists the requested metadata of the matching datasets" do
-                        call_cli('metadata', datastore_path.to_s, 'a0fa', '--set', 'test=a,b', 'debug=true', silent: false)
+                        call_cli('metadata', datastore_path.to_s, 'a0ea', '--set', 'test=a,b', 'debug=true', silent: false)
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, 'a0fa', '--get', 'test', silent: false)
+                            call_cli('metadata', datastore_path.to_s, 'a0ea', '--get', 'test', silent: false)
                         end
-                        assert_equal "a0fa test=a,b\n", out
+                        assert_equal "a0ea test=a,b\n", out
                     end
                     it "replaces requested metadata that are unset by <unset>" do
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, 'a0fa', '--get', 'debug', silent: false)
+                            call_cli('metadata', datastore_path.to_s, 'a0ea', '--get', 'debug', silent: false)
                         end
-                        assert_equal "a0fa debug=<unset>\n", out
+                        assert_equal "a0ea debug=<unset>\n", out
                     end
                 end
 
                 it "raises if both --get and --set are provided" do
                     assert_raises(ArgumentError) do
-                        call_cli('metadata', datastore_path.to_s, 'a0fa', '--get', 'debug', '--set', 'test=10', silent: false)
+                        call_cli('metadata', datastore_path.to_s, 'a0ea', '--get', 'debug', '--set', 'test=10', silent: false)
                     end
                 end
 
                 it "raises if neither --get nor --set are provided" do
                     assert_raises(ArgumentError) do
-                        call_cli('metadata', datastore_path.to_s, 'a0fa', silent: false)
+                        call_cli('metadata', datastore_path.to_s, 'a0ea', silent: false)
                     end
                 end
             end

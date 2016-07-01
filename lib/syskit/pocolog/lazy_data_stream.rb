@@ -70,5 +70,13 @@ module Syskit::Pocolog
             file = Pocolog::Logfiles.open(path, index_dir: index_dir)
             file.streams.first
         end
+
+        def duration_lg
+            if interval_lg.empty?
+                0
+            else
+                interval_lg[1] - interval_lg[0]
+            end
+        end
     end
 end

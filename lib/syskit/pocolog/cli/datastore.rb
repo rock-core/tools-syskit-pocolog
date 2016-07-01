@@ -29,14 +29,14 @@ module Syskit::Pocolog
                     Syskit::Pocolog::Datastore.new(path)
                 end
 
-                def show_dataset(store, dataset, long_digest: false)
+                def show_dataset(pastel, store, dataset, long_digest: false)
                     description = dataset.metadata_fetch_all('description', "<no description>")
                     if !long_digest
                         digest = store.short_digest(dataset)
                     end
-                    format = "% #{digest.size}s %s"
+                    format = "% #{digest.size}s"
                     description.zip([digest]) do |a, b|
-                        puts format % [b, a]
+                        puts "#{pastel.bold(format % [b])} #{a}"
                     end
                     metadata = dataset.metadata
                     metadata.each do |k, v|
@@ -50,6 +50,65 @@ module Syskit::Pocolog
                             end
                         end
                     end
+                end
+
+                def format_date(time)
+                    time.strftime("%Y-%m-%d")
+                end
+
+                def format_time(time)
+                    time.strftime("%H:%M:%S.%6N %z")
+                end
+
+                def format_duration(time)
+                    "%4i:%02i:%02i.%06i" % [
+                        Integer(time / 3600),
+                        Integer((time % 3600) / 60),
+                        Integer(time % 60),
+                        Integer((time * 1_000_000) % 1_000_000)]
+                end
+
+                def show_task_objects(objects, name_field_size)
+                    format = "      %-#{name_field_size + 1}s %s"
+
+                    stream_sizes = objects.map do |_, stream|
+                        stream.size.to_s
+                    end
+                    stream_size_field_size = stream_sizes.map(&:size).max
+                    stream_sizes = stream_sizes.map do |size|
+                        "% #{stream_size_field_size}s" % [size]
+                    end
+                    objects.each_with_index do |(name, stream), i|
+                        if stream.empty?
+                            puts format % ["#{name}:", 'empty']
+                        else
+                            interval_lg = stream.interval_lg.map { |t| format_date(t) + " " + format_time(t) }
+                            duration_lg = format_duration(stream.duration_lg)
+                            puts format % ["#{name}:", "#{stream_sizes[i]} samples from #{interval_lg[0]} to #{interval_lg[1]} [#{duration_lg}]"]
+                        end
+                    end
+                end
+
+                def show_dataset_pocolog(pastel, store, dataset)
+                    tasks = dataset.each_task(load_models: false, skip_tasks_without_models: false).to_a
+                    puts "  #{tasks.size} oroGen tasks in #{dataset.each_pocolog_path.to_a.size} streams"
+                    tasks.each do |task|
+                        ports = task.each_port_stream.to_a
+                        properties = task.each_property_stream.to_a
+                        puts "    #{task.task_name}[#{task.orogen_model_name}]: #{ports.size} ports and #{properties.size} properties"
+                        name_field_size = (ports.map { |name, _| name.size } + properties.map { |name, _| name.size }).max
+                        if !ports.empty?
+                            puts "    Ports:"
+                            show_task_objects(ports, name_field_size)
+                        end
+                        if !properties.empty?
+                            puts "    Properties:"
+                            show_task_objects(properties, name_field_size)
+                        end
+                    end
+                end
+
+                def show_dataset_roby(pastel, store, dataset)
                 end
 
                 def resolve_datasets(store, *query)
@@ -201,14 +260,37 @@ module Syskit::Pocolog
             end
 
             desc 'list DATASTORE_PATH [QUERY]', 'list datasets and their information'
-            method_option :long_digest, desc: 'display digests in full form, instead of shortening them',
+            method_option :digest, desc: 'only show the digest and no other information (for scripting)',
+                type: :boolean, default: false
+            method_option :long_digests, desc: 'display digests in full form, instead of shortening them',
+                type: :boolean, default: false
+            method_option :pocolog, desc: 'show detailed information about the pocolog streams in the dataset(s)',
+                type: :boolean, default: false
+            method_option :roby, desc: 'show detailed information about the Roby log in the dataset(s)',
+                type: :boolean, default: false
+            method_option :all, desc: 'show all available information (implies --pocolog and --roby)',
                 type: :boolean, default: false
             def list(datastore_path, *query)
                 store = open_store(datastore_path)
                 datasets = resolve_datasets(store, *query)
 
+                pastel = Pastel.new
                 datasets.each do |dataset|
-                    show_dataset(store, dataset, long_digest: options[:long_digest])
+                    if options[:digest]
+                        if options[:long_digests]
+                            puts dataset.digest
+                        else
+                            puts store.short_digest(dataset)
+                        end
+                    else
+                        show_dataset(pastel, store, dataset, long_digest: options[:long_digests])
+                        if options[:all] || options[:roby]
+                            show_dataset_roby(pastel, store, dataset)
+                        end
+                        if options[:all] || options[:pocolog]
+                            show_dataset_pocolog(pastel, store, dataset)
+                        end
+                    end
                 end
             end
 
