@@ -3,6 +3,7 @@ require 'syskit/test/self'
 require 'syskit/pocolog'
 require 'pocolog/test_helpers'
 require 'minitest/autorun'
+require 'syskit/pocolog/datastore/index_build'
 
 module Syskit::Pocolog
     module Test
@@ -30,7 +31,7 @@ module Syskit::Pocolog
             @datastore = Datastore.create(path)
         end
 
-        def create_dataset(digest)
+        def create_dataset(digest, metadata: Hash.new)
             if !@datastore
                 raise ArgumentError, "must call #create_datastore before #create_dataset"
             end
@@ -39,11 +40,19 @@ module Syskit::Pocolog
             core_path.mkpath
             move_logfile_path(core_path + "pocolog", delete_current: false)
             dataset = Datastore::Dataset.new(core_path, cache: @datastore.cache_path_of(digest))
-            begin
-                yield
-            ensure
-                identity = dataset.compute_dataset_identity_from_files
-                dataset.write_dataset_identity_to_metadata_file(identity)
+            if block_given?
+                begin
+                    yield
+                ensure
+                    identity = dataset.compute_dataset_identity_from_files
+                    dataset.write_dataset_identity_to_metadata_file(identity)
+                    metadata.each do |k, v|
+                        dataset.metadata_set(k, *v)
+                    end
+                    dataset.metadata_write_to_file
+                end
+            else
+                dataset
             end
         end
 

@@ -51,7 +51,11 @@ module Syskit::Pocolog
             # @return [Pathname]
             attr_reader :cache_path
 
-            def initialize(path, cache: path)
+            # If this dataset is part of a store, the digest in the store
+            attr_reader :digest
+
+            def initialize(path, digest: nil, cache: path)
+                @digest = digest
                 @dataset_path = path.realpath
                 @cache_path = cache
                 @metadata = nil
@@ -95,7 +99,7 @@ module Syskit::Pocolog
             #   format
             def digest_from_path
                 digest = dataset_path.basename.to_s
-                begin validate_encoded_sha2(digest)
+                begin self.class.validate_encoded_sha2(digest)
                 rescue InvalidDigest => e
                     raise InvalidPath, "#{dataset_path}'s name does not look like a valid digest: #{e.message}"
                 end
@@ -119,9 +123,22 @@ module Syskit::Pocolog
                 end
             end
 
+            def self.validate_encoded_short_digest(digest)
+                if digest.length > ENCODED_DIGEST_LENGTH
+                    raise InvalidDigest, "#{digest} does not look like a valid SHA2 short digest encoded with #{DIGEST_ENCODING_METHOD}. Expected at most #{ENCODED_DIGEST_LENGTH} characters but got #{digest.length}"
+                elsif digest !~ /^[0-9a-f]+$/
+                    raise InvalidDigest, "#{digest} does not look like a valid SHA2 digest encoded with #{DIGEST_ENCODING_METHOD}. Expected characters in 0-9a-zA-Z+"
+                end
+                digest
+            end
+
+            def self.validate_encoded_digest(digest)
+                validate_encoded_sha2(digest)
+            end
+
             # Validate that the argument looks like a valid sha2 digest encoded
             # with {DIGEST_ENCODING_METHOD}
-            def validate_encoded_sha2(sha2)
+            def self.validate_encoded_sha2(sha2)
                 if sha2.length != ENCODED_DIGEST_LENGTH
                     raise InvalidDigest, "#{sha2} does not look like a valid SHA2 digest encoded with #{DIGEST_ENCODING_METHOD}. Expected #{ENCODED_DIGEST_LENGTH} characters but got #{sha2.length}"
                 elsif sha2 !~ /^[0-9a-f]+$/
@@ -158,7 +175,7 @@ module Syskit::Pocolog
                     end
 
                     begin
-                        validate_encoded_sha2(path_info['sha2'])
+                        self.class.validate_encoded_sha2(path_info['sha2'])
                     rescue InvalidDigest => e
                         raise InvalidIdentityMetadata, "value of field 'sha2' in #{metadata_path} does not look like a valid SHA2 digest: #{e.message}"
                     end
@@ -245,7 +262,7 @@ module Syskit::Pocolog
                 # Verify the identity's format itself
                 dataset_identity.each do |entry|
                     Integer(entry.size)
-                    validate_encoded_sha2(entry.sha2)
+                    self.class.validate_encoded_sha2(entry.sha2)
                 end
 
                 important_files = each_important_file.inject(Hash.new) do |h, path|
@@ -284,7 +301,7 @@ module Syskit::Pocolog
                     if size < 0
                         raise InvalidIdentityMetadata, "#{entry.size} is not a valid file size"
                     end
-                    sha2 = begin validate_encoded_sha2(entry.sha2)
+                    sha2 = begin self.class.validate_encoded_sha2(entry.sha2)
                            rescue InvalidDigest
                                raise InvalidIdentityMetadata, "#{entry.sha2} is not a valid digest"
                            end
@@ -307,6 +324,11 @@ module Syskit::Pocolog
             # Reset all metadata associated with this dataset
             def metadata_reset
                 @metadata = Hash.new
+            end
+
+            # Resets a metadata value
+            def metadata_set(key, *values)
+                metadata[key] = Set[*values]
             end
 
             # Add a new metadata value

@@ -27,19 +27,53 @@ module Syskit::Pocolog
             store = Datastore.new(datastore_path)
         end
 
+        class AmbiguousShortDigest < ArgumentError; end
+
+        # Finds the dataset that matches the given shortened digest
+        def find_dataset_from_short_digest(digest)
+            datasets = each_dataset_digest.find_all do |on_disk_digest|
+                on_disk_digest.start_with?(digest)
+            end
+            if datasets.size > 1
+                raise AmbiguousShortDigest, "#{digest} is ambiguous, it matches #{datasets.join(", ")}"
+            elsif !datasets.empty?
+                get(datasets.first)
+            end
+        end
+
+        # Returns the short digest for the given dataset, or the full digest if
+        # shortening creates a collision
+        def short_digest(dataset, size: 10)
+            short = dataset.digest[0, size]
+            begin
+                find_dataset_from_short_digest(short)
+                short
+            rescue AmbiguousShortDigest
+                dataset.digest
+            end
+        end
+
         # Whether a dataset with the given ID exists
         def has?(digest)
             core_path_of(digest).exist?
         end
 
         # Enumerate the store's datasets
-        def each_dataset
+        def each_dataset_digest
             return enum_for(__method__) if !block_given?
             core_path = (datastore_path + "core")
             core_path.each_entry do |dataset_path|
                 if Dataset.dataset?(core_path + dataset_path)
-                    yield(get(dataset_path.to_s))
+                    yield(dataset_path.to_s)
                 end
+            end
+        end
+
+        # Enumerate the store's datasets
+        def each_dataset
+            return enum_for(__method__) if !block_given?
+            each_dataset_digest do |digest|
+                yield(get(digest))
             end
         end
 
@@ -71,7 +105,7 @@ module Syskit::Pocolog
                 raise ArgumentError, "no dataset with digest #{digest} exist"
             end
 
-            dataset = Dataset.new(core_path_of(digest), cache: cache_path_of(digest))
+            dataset = Dataset.new(core_path_of(digest), digest: digest, cache: cache_path_of(digest))
             dataset.weak_validate_identity_metadata
             dataset.metadata
             dataset

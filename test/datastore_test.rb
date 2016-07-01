@@ -124,5 +124,37 @@ module Syskit::Pocolog
                 end
             end
         end
+
+        describe "#find_dataset_from_short_digest" do
+            before do
+                create_dataset("a0ea") {}
+                create_dataset("a0fa") {}
+            end
+            it "returns a dataset whose digest starts with the given string" do
+                assert_equal datastore.core_path_of('a0ea'),
+                    datastore.find_dataset_from_short_digest("a0e").dataset_path
+            end
+            it "returns nil if nothing matches" do
+                assert_nil datastore.find_dataset_from_short_digest("b")
+            end
+            it "raises if more than one dataset matches" do
+                assert_raises(Datastore::AmbiguousShortDigest) do
+                    datastore.find_dataset_from_short_digest("a0")
+                end
+            end
+        end
+
+        describe "#short_digest" do
+            before do
+                create_dataset("a0ea") {}
+                create_dataset("a0fa") {}
+            end
+            it "returns the N first digits of the dataset's digest if they are not ambiguous" do
+                assert_equal "a0e", datastore.short_digest(flexmock(digest: "a0ea"), size: 3)
+            end
+            it "returns the full dataset's digest if the prefix is ambiguous" do
+                assert_equal "a0ea", datastore.short_digest(flexmock(digest: "a0ea"), size: 2)
+            end
+        end
     end
 end

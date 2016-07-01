@@ -241,6 +241,171 @@ module Syskit::Pocolog
                     call_cli('index', datastore_path.to_s, 'A')
                 end
             end
+
+            describe "#list" do
+                attr_reader :show_a0fa, :show_a0ga
+                before do
+                    create_dataset "a0fa", metadata: Hash['description' => 'first', 'test' => ['2'], 'array_test' => ['a', 'b']] do
+                        create_logfile('test.0.log') {}
+                    end
+                    create_dataset "a0ga", metadata: Hash['test' => ['1'], 'array_test' => ['c', 'd']] do
+                        create_logfile('test.0.log') {}
+                    end
+                    @show_a0fa = <<-EOF
+a0fa first
+  test: 2
+  array_test:
+  - a
+  - b
+                    EOF
+                    @show_a0ga = <<-EOF
+a0ga <no description>
+  test: 1
+  array_test:
+  - c
+  - d
+                    EOF
+
+
+                end
+
+                it "raises if the query is invalid" do
+                    assert_raises(Syskit::Pocolog::Datastore::Dataset::InvalidDigest) do
+                        call_cli('list', datastore_path.to_s, 'not_a_sha', silent: false)
+                    end
+                end
+
+                it "lists all datasets if given only the datastore path" do
+                    out, _err = capture_io do
+                        call_cli('list', datastore_path.to_s, silent: false)
+                    end
+                    assert_equal [show_a0fa, show_a0ga].join, out
+                end
+                it "lists only the short digests if --digest is given" do
+                    out, _err = capture_io do
+                        call_cli('list', datastore_path.to_s, '--digest', silent: false)
+                    end
+                    assert_equal "a0ea\na0fa\n", out
+                end
+                it "lists only the short digests if --digest --long-digests are given" do
+                    out, _err = capture_io do
+                        call_cli('list', datastore_path.to_s, '--digest', '--long-digests', silent: false)
+                    end
+                    assert_equal "a0ea\na0fa\n", out
+                end
+                it "accepts a digest prefix as argument" do
+                    out, _err = capture_io do
+                        call_cli('list', datastore_path.to_s, 'a0f', silent: false)
+                    end
+                    assert_equal show_a0fa, out
+                end
+                it "can match metadata exactly" do
+                    out, _err = capture_io do
+                        call_cli('list', datastore_path.to_s, 'test=1', silent: false)
+                    end
+                    assert_equal show_a0ga, out
+                end
+                it "can match metadata with a regexp" do
+                    out, _err = capture_io do
+                        call_cli('list', datastore_path.to_s, 'array_test~[ac]', silent: false)
+                    end
+                    assert_equal [show_a0fa, show_a0ga].join, out
+                end
+            end
+
+            describe "#metadata" do
+                before do
+                    create_dataset "a0fa", metadata: Hash['test' => ['a']] do
+                        create_logfile('test.0.log') {}
+                    end
+                    create_dataset "a0ga", metadata: Hash['test' => ['b']] do
+                        create_logfile('test.0.log') {}
+                    end
+                end
+
+                it "raises if the query is invalid" do
+                    assert_raises(Syskit::Pocolog::Datastore::Dataset::InvalidDigest) do
+                        call_cli('metadata', datastore_path.to_s, 'not_a_sha', '--get', silent: false)
+                    end
+                end
+
+                describe '--set' do
+                    it "sets metadata on the given dataset" do
+                        call_cli('metadata', datastore_path.to_s, 'a0f', '--set', 'debug=true', silent: false)
+                        assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
+                        assert_nil datastore.get('a0ga').metadata['debug']
+                    end
+                    it "sets metadata on matching datasets" do
+                        call_cli('metadata', datastore_path.to_s, 'test=b', '--set', 'debug=true', silent: false)
+                        assert_nil datastore.get('a0fa').metadata['debug']
+                        assert_equal Set['true'], datastore.get('a0ga').metadata['debug']
+                    end
+                    it "sets metadata on all datasets if no query is given" do
+                        call_cli('metadata', datastore_path.to_s, '--set', 'debug=true', silent: false)
+                        assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
+                        assert_equal Set['true'], datastore.get('a0ga').metadata['debug']
+                    end
+                    it "collects all set arguments with the same key" do
+                        call_cli('metadata', datastore_path.to_s, '--set', 'test=a', 'test=b', 'test=c', silent: false)
+                        assert_equal Set['a', 'b', 'c'], datastore.get('a0fa').metadata['test']
+                    end
+                    it "raises if the argument to set is not a key=value association" do
+                        assert_raises(ArgumentError) do
+                            call_cli('metadata', datastore_path.to_s, 'a0fa', '--set', 'debug', silent: false)
+                        end
+                    end
+                end
+
+                describe '--get' do
+                    it "lists all metadata on all datasets if no query is given" do
+                        call_cli('metadata', datastore_path.to_s, 'a0fa', '--set', 'test=a,b', silent: false)
+                        out, _err = capture_io do
+                            call_cli('metadata', datastore_path.to_s, '--get', silent: false)
+                        end
+                        assert_equal "a0fa test=a,b\na0ga test=b\n", out
+                    end
+                    it "displays the short digest by default" do
+                        flexmock(Syskit::Pocolog::Datastore).new_instances.should_receive(:short_digest).
+                            and_return { |dataset| dataset.digest[0, 3] }
+                        out, _err = capture_io do
+                            call_cli('metadata', datastore_path.to_s, '--get', silent: false)
+                        end
+                        assert_equal "a0f test=a\na0g test=b\n", out
+                    end
+                    it "displays the long digest if --long-digest is given" do
+                        flexmock(datastore).should_receive(:short_digest).never
+                        out, _err = capture_io do
+                            call_cli('metadata', datastore_path.to_s, '--get', '--long-digest', silent: false)
+                        end
+                        assert_equal "a0fa test=a\na0ga test=b\n", out
+                    end
+                    it "lists the requested metadata of the matching datasets" do
+                        call_cli('metadata', datastore_path.to_s, 'a0fa', '--set', 'test=a,b', 'debug=true', silent: false)
+                        out, _err = capture_io do
+                            call_cli('metadata', datastore_path.to_s, 'a0fa', '--get', 'test', silent: false)
+                        end
+                        assert_equal "a0fa test=a,b\n", out
+                    end
+                    it "replaces requested metadata that are unset by <unset>" do
+                        out, _err = capture_io do
+                            call_cli('metadata', datastore_path.to_s, 'a0fa', '--get', 'debug', silent: false)
+                        end
+                        assert_equal "a0fa debug=<unset>\n", out
+                    end
+                end
+
+                it "raises if both --get and --set are provided" do
+                    assert_raises(ArgumentError) do
+                        call_cli('metadata', datastore_path.to_s, 'a0fa', '--get', 'debug', '--set', 'test=10', silent: false)
+                    end
+                end
+
+                it "raises if neither --get nor --set are provided" do
+                    assert_raises(ArgumentError) do
+                        call_cli('metadata', datastore_path.to_s, 'a0fa', silent: false)
+                    end
+                end
+            end
         end
     end
 end

@@ -64,29 +64,53 @@ module Syskit::Pocolog
                 end
             end
 
-            describe "#validate_encoded_sha2" do
+            describe ".validate_encoded_short_digest" do
+                attr_reader :sha2
+                before do
+                    @sha2 = Digest::SHA2.hexdigest("TEST")
+                end
+                it "returns the digest unmodified if it is shorted than a full SHA2 digest" do
+                    assert_equal sha2[0..-2], Dataset.validate_encoded_short_digest(sha2[0..-2])
+                end
+                it "raises if the string is too long" do
+                    assert_raises(Dataset::InvalidDigest) do
+                        Dataset.validate_encoded_short_digest(sha2 + " ")
+                    end
+                end
+                it "raises if the string contains invalid characters for base64" do
+                    sha2[3, 1] = '_'
+                    assert_raises(Dataset::InvalidDigest) do
+                        Dataset.validate_encoded_short_digest(sha2)
+                    end
+                end
+                it "returns the digest unmodified if it is valid" do
+                    assert_equal sha2, Dataset.validate_encoded_short_digest(sha2)
+                end
+            end
+
+            describe ".validate_encoded_sha2" do
                 attr_reader :sha2
                 before do
                     @sha2 = Digest::SHA2.hexdigest("TEST")
                 end
                 it "raises if the string is too short" do
                     assert_raises(Dataset::InvalidDigest) do
-                        dataset.validate_encoded_sha2(sha2[0..-2])
+                        Dataset.validate_encoded_sha2(sha2[0..-2])
                     end
                 end
                 it "raises if the string is too long" do
                     assert_raises(Dataset::InvalidDigest) do
-                        dataset.validate_encoded_sha2(sha2 + " ")
+                        Dataset.validate_encoded_sha2(sha2 + " ")
                     end
                 end
                 it "raises if the string contains invalid characters for base64" do
                     sha2[3, 1] = '_'
                     assert_raises(Dataset::InvalidDigest) do
-                        dataset.validate_encoded_sha2(sha2)
+                        Dataset.validate_encoded_sha2(sha2)
                     end
                 end
                 it "returns the digest unmodified if it is valid" do
-                    assert_equal sha2, dataset.validate_encoded_sha2(sha2)
+                    assert_equal sha2, Dataset.validate_encoded_sha2(sha2)
                 end
             end
 
@@ -233,7 +257,7 @@ module Syskit::Pocolog
                     dataset.write_dataset_identity_to_metadata_file
                 end
                 it "computes a sha2 hash" do
-                    dataset.validate_encoded_sha2(dataset.compute_dataset_digest)
+                    Dataset.validate_encoded_sha2(dataset.compute_dataset_digest)
                 end
                 it "is sensitive only to the file's relative paths" do
                     digest = dataset.compute_dataset_digest
@@ -366,6 +390,18 @@ module Syskit::Pocolog
                 it "loads the metadata only once" do
                     metadata_hash = dataset.metadata
                     assert_same metadata_hash, dataset.metadata
+                end
+            end
+
+            describe "#metadata_set" do
+                it "creates a new key->values mapping" do
+                    dataset.metadata_set("test", 10, 20)
+                    assert_equal Hash['test' => Set[10, 20]], dataset.metadata
+                end
+                it "resets existing values with the new ones" do
+                    dataset.metadata_add("test", 10, 20)
+                    dataset.metadata_set("test", 30, 40)
+                    assert_equal Hash['test' => Set[30, 40]], dataset.metadata
                 end
             end
 

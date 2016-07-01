@@ -15,6 +15,72 @@ module Syskit::Pocolog
         class Datastore < Roby::CLI::Base
             namespace 'datastore'
 
+            no_commands do
+                def create_reporter(format = "", silent: false, **options)
+                    if silent
+                        Pocolog::CLI::NullReporter.new
+                    else
+                        Pocolog::CLI::TTYReporter.new(format, **options)
+                    end
+                end
+
+                def open_store(path)
+                    path = Pathname.new(path).realpath
+                    Syskit::Pocolog::Datastore.new(path)
+                end
+
+                def show_dataset(store, dataset, long_digest: false)
+                    description = dataset.metadata_fetch_all('description', "<no description>")
+                    if !long_digest
+                        digest = store.short_digest(dataset)
+                    end
+                    format = "% #{digest.size}s %s"
+                    description.zip([digest]) do |a, b|
+                        puts format % [b, a]
+                    end
+                    metadata = dataset.metadata
+                    metadata.each do |k, v|
+                        next if k == 'description'
+                        if v.size == 1
+                            puts "  #{k}: #{v.first}"
+                        else
+                            puts "  #{k}:"
+                            v.each do |value|
+                                puts "  - #{value}"
+                            end
+                        end
+                    end
+                end
+
+                def resolve_datasets(store, *query)
+                    if query.empty?
+                        return store.each_dataset
+                    end
+
+                    matchers = Hash.new
+                    query.each do |kv|
+                        if kv =~ /=/
+                            k, v = kv.split('=')
+                            matchers[k] = v
+                        elsif kv =~ /~/
+                            k, v = kv.split('~')
+                            matchers[k] = /#{v}/
+                        else # assume this is a digest
+                            Syskit::Pocolog::Datastore::Dataset.
+                                validate_encoded_short_digest(kv)
+                            matchers['digest'] = /^#{kv}/
+                        end
+                    end
+                    store.each_dataset.find_all do |dataset|
+                        Hash['digest' => [dataset.digest]].merge(dataset.metadata).any? do |key, values|
+                            if v_match = matchers[key]
+                                values.any? { |v| v_match === v }
+                            end
+                        end
+                    end
+                end
+            end
+
             desc 'normalize PATH [--out OUTPUT]', 'normalizes a data stream into a format that is suitable for the other log management commands to work'
             method_option :out, desc: 'output directory (defaults to a normalized/ folder under the source folder)',
                 default: 'normalized'
@@ -133,6 +199,79 @@ module Syskit::Pocolog
                     end
                 datasets.each do |d|
                     Syskit::Pocolog::Datastore.index_build(store, d, force: options[:force])
+                end
+            end
+
+            desc 'list DATASTORE_PATH [QUERY]', 'list datasets and their information'
+            method_option :long_digest, desc: 'display digests in full form, instead of shortening them',
+                type: :boolean, default: false
+            def list(datastore_path, *query)
+                store = open_store(datastore_path)
+                datasets = resolve_datasets(store, *query)
+
+                datasets.each do |dataset|
+                    show_dataset(store, dataset, long_digest: options[:long_digest])
+                end
+            end
+
+            desc 'metadata DATASTORE_PATH [QUERY] [--set=KEY=VALUE KEY=VALUE|--get=KEY]',
+                'sets or gets metadata values for a dataset or datasets'
+            method_option :set, desc: 'the key=value associations to set',
+                type: :array
+            method_option :get, desc: 'the keys to get',
+                type: :array, lazy_default: []
+            method_option :long_digest, desc: 'display digests in full form, instead of shortening them',
+                type: :boolean, default: false
+            def metadata(datastore_path, *query)
+                if !options[:get] && !options[:set]
+                    raise ArgumentError, "provide either --get or --set"
+                elsif options[:get] && options[:set]
+                    raise ArgumentError, "cannot provide both --get and --set at the same time"
+                end
+
+                store = open_store(datastore_path)
+                datasets = resolve_datasets(store, *query)
+
+                digest_to_s =
+                    if options[:long_digest]
+                        ->(d) { d.digest }
+                    else
+                        store.method(:short_digest)
+                    end
+
+                if options[:set]
+                    setters = Hash.new
+                    options[:set].map do |arg|
+                        key, value = arg.split('=')
+                        if !value
+                            raise ArgumentError, "metadata setters need to be specified as key=value (got #{arg})"
+                        end
+                        (setters[key] ||= Set.new) << value
+                    end
+
+                    datasets.each do |set|
+                        setters.each do |k, v|
+                            set.metadata_set(k, *v)
+                        end
+                        set.metadata_write_to_file
+                    end
+                elsif options[:get].empty?
+                    datasets.each do |set|
+                        metadata = set.metadata.map { |k, v| [k, v.to_a.sort.join(",")] }.
+                            sort_by(&:first).
+                            map { |k, v| "#{k}=#{v}" }.
+                            join(" ")
+                        puts "#{digest_to_s[set]} #{metadata}"
+                    end
+                else
+                    datasets.each do |set|
+                        metadata = options[:get].map do |k, v|
+                            [k, set.metadata_fetch_all(k, "<unset>")]
+                        end
+                        metadata = metadata.map { |k, v| "#{k}=#{v.to_a.sort.join(",")}" }.
+                            join(" ")
+                        puts "#{digest_to_s[set]} #{metadata}"
+                    end
                 end
             end
         end
