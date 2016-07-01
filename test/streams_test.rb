@@ -232,9 +232,25 @@ module Syskit::Pocolog
                     with('project').
                     and_return { Syskit::TaskContext.new_submodel(orogen_model_name: 'project::Task') }
                 loader.should_receive(:project_model_from_name).once.
-                    with('other_project')
+                    with('other_project').
+                    pass_thru
                 should_warn /ignored 1 stream.*other_project::Task.*other_project/
                 assert_equal ['task'], subject.each_task(load_models: true, loader: loader).map(&:task_name)
+            end
+
+            it "raises if the task project's cannot be found and raise_on_missing_task_models is true" do
+                loader = OroGen::Loaders::Aggregate.new
+                assert_raises(OroGen::ProjectNotFound) do
+                    subject.each_task(raise_on_missing_task_models: true, loader: loader).to_a
+                end
+            end
+
+            it "raises if the task is not present in its project and raise_on_missing_task_models is true" do
+                loader = flexmock
+                loader.should_receive(:project_model_from_name)
+                assert_raises(OroGen::NotFound) do
+                    subject.each_task(raise_on_missing_task_models: true, loader: loader).to_a
+                end
             end
 
             it "groups the streams per task name" do

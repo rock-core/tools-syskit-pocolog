@@ -41,12 +41,21 @@ module Syskit::Pocolog
         # they have a name and model, and the model can be resolved
         #
         # @param [Boolean] load_models whether the method should attempt to
-        #   load the missing models
-        # @param [#using_task_library] app the app that should be used to
-        #   load the missing models when load_models is true
+        #   load the task's models if they are not yet loaded
+        # @param [Boolean] skip_tasks_without_models whether the tasks whose
+        #   model cannot be found should be enumerated or not
+        # @param [Boolean] raise_on_missing_task_models whether the method
+        #   should raise if a task model cannot be resolved
+        # @param [#project_model_from_orogen_name] loader the object that should
+        #   be used to load the missing models when load_models is true
         # @yieldparam [TaskStreams] task
-        def each_task(load_models: true, ignore_missing_task_models: true, loader: Roby.app.default_loader)
-            return enum_for(__method__, load_models: load_models, ignore_missing_task_models: ignore_missing_task_models, loader: loader) if !block_given?
+        def each_task(load_models: true, skip_tasks_without_models: true, raise_on_missing_task_models: false, loader: Roby.app.default_loader)
+            if !block_given?
+                return enum_for(__method__, load_models: load_models,
+                                skip_tasks_without_models: skip_tasks_without_models,
+                                raise_on_missing_task_models: raise_on_missing_task_models,
+                                loader: loader) 
+            end
 
             available_tasks = Hash.new { |h, k| h[k] = Array.new }
             ignored_streams = Hash.new { |h, k| h[k] = Array.new }
@@ -60,17 +69,19 @@ module Syskit::Pocolog
                 end
 
                 task_m = Syskit::TaskContext.find_model_from_orogen_name(task_model_name)
-                if !task_m && load_models 
+                if !task_m && load_models
                     orogen_project_name, *_tail = task_model_name.split('::')
-                    loader.project_model_from_name(orogen_project_name)
                     begin
-                        task_m = Syskit::TaskContext.find_model_from_orogen_name(task_model_name)
-                    rescue NotFound
-                        raise if !ignore_missing_task_models
+                        loader.project_model_from_name(orogen_project_name)
+                    rescue OroGen::ProjectNotFound
+                        raise if raise_on_missing_task_models
                     end
+                    task_m = Syskit::TaskContext.find_model_from_orogen_name(task_model_name)
                 end
-                if task_m
+                if task_m || !skip_tasks_without_models
                     available_tasks[s.metadata['rock_task_name']] << s
+                elsif raise_on_missing_task_models
+                    raise OroGen::NotFound, "cannot find #{task_model_name}"
                 else
                     ignored_streams[task_model_name] << s
                 end
@@ -262,9 +273,14 @@ module Syskit::Pocolog
         end
 
         # Creates a deployment group object that deploys all streams
-        def to_deployment_group(load_models: true, loader: Roby.app.default_loader, ignore_missing_task_models: true)
+        #
+        # @param (see Streams#each_task)
+        def to_deployment_group(load_models: true, skip_tasks_without_models: true, raise_on_missing_task_models: false, loader: Roby.app.default_loader)
             group = Syskit::Models::DeploymentGroup.new
-            each_task(load_models: load_models, loader: loader, ignore_missing_task_models: ignore_missing_task_models) do |task_streams|
+            each_task(load_models: load_models,
+                      skip_tasks_without_models: skip_tasks_without_models,
+                      raise_on_missing_task_models: raise_on_missing_task_models,
+                      loader: loader) do |task_streams|
                 group.use_pocolog_task(task_streams)
             end
             group
