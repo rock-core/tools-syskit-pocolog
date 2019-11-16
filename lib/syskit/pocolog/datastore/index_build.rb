@@ -45,7 +45,7 @@ module Syskit::Pocolog
                 dataset.each_pocolog_path do |logfile_path|
                     logfile_name = logfile_path.relative_path_from(dataset.dataset_path)
                     begin
-                        index_path = Pocolog::Logfiles.default_index_filename(
+                        index_path = ::Pocolog::Logfiles.default_index_filename(
                             logfile_path, index_dir: pocolog_index_dir)
 
                         stat = logfile_path.stat

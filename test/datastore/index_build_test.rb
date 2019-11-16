@@ -21,7 +21,7 @@ module Syskit::Pocolog
             describe "#rebuild_pocolog_indexes" do
                 before do
                     create_logfile 'task::port.0.log' do
-                        create_logfile_stream 'test', metadata: Hash['rock_task_name' => 'task', 
+                        create_logfile_stream 'test', metadata: Hash['rock_task_name' => 'task',
                                                                    'rock_task_object_name' => 'port']
                         write_logfile_sample Time.now, Time.now, 10
                     end

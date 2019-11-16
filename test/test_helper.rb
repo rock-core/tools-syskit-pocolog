@@ -17,9 +17,7 @@ module Syskit::Pocolog
         end
 
         def teardown
-            if @pocolog_log_level
-                ::Pocolog.logger.level = @pocolog_log_level
-            end
+            ::Pocolog.logger.level = @pocolog_log_level if @pocolog_log_level
             super
         end
 

@@ -32,7 +32,7 @@ module Syskit::Pocolog
                 it "generates valid index files for the normalized streams" do
                     logfile_pathname('normalized').mkdir
                     normalize.normalize([logfile_pathname('file0.0.log')])
-                    flexmock(Pocolog::Logfiles).new_instances.
+                    flexmock(::Pocolog::Logfiles).new_instances.
                         should_receive(:rebuild_and_load_index).
                         never
                     normalized_dir = logfile_pathname('normalized')
@@ -43,7 +43,7 @@ module Syskit::Pocolog
                     logfile_pathname('normalized').mkdir
                     index_dir = logfile_pathname("cache")
                     normalize.normalize([logfile_pathname('file0.0.log')], index_dir: index_dir)
-                    flexmock(Pocolog::Logfiles).new_instances.
+                    flexmock(::Pocolog::Logfiles).new_instances.
                         should_receive(:rebuild_and_load_index).
                         never
                     normalized_dir = logfile_pathname('normalized')
@@ -62,7 +62,7 @@ module Syskit::Pocolog
                     it "generates valid index files for the normalized streams" do
                         logfile_pathname('normalized').mkdir
                         normalize.normalize([logfile_pathname('file0.0.log')], compute_sha256: true)
-                        flexmock(Pocolog::Logfiles).new_instances.
+                        flexmock(::Pocolog::Logfiles).new_instances.
                             should_receive(:rebuild_and_load_index).
                             never
                         normalized_dir = logfile_pathname('normalized')

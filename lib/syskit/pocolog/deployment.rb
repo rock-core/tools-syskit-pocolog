@@ -10,9 +10,9 @@ module Syskit::Pocolog
 
         attr_reader :stream_to_port
 
-        def initialize(options = Hash.new)
+        def initialize(**options)
             super
-            @stream_to_port = Hash.new
+            @stream_to_port = {}
         end
 
         def deployed_model_by_orogen_model(orogen_model)
@@ -23,12 +23,12 @@ module Syskit::Pocolog
             execution_engine.pocolog_replay_manager
         end
 
-        on :start do |context|
+        on :start do |_context|
             replay_manager.register(self)
             ready_event.emit
         end
 
-        on :stop do |context|
+        on :stop do |_context|
             replay_manager.deregister(self)
         end
 
@@ -45,10 +45,8 @@ module Syskit::Pocolog
             end
         end
 
-        def process_sample(stream, time, sample)
-            if orocos_port = stream_to_port[stream]
-                orocos_port.write(sample)
-            end
+        def process_sample(stream, _time, sample)
+            stream_to_port[stream]&.write(sample)
         end
     end
 end

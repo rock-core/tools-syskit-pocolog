@@ -56,7 +56,9 @@ module Syskit::Pocolog
         end
 
         # True if the size of this stream is zero
-        def empty?; size == 0 end
+        def empty?
+            size == 0
+        end
 
         # The underlying typelib registry
         def registry
@@ -67,7 +69,7 @@ module Syskit::Pocolog
         #
         # @return [Pocolog::DataStream]
         def syskit_eager_load
-            file = Pocolog::Logfiles.open(path, index_dir: index_dir)
+            file = ::Pocolog::Logfiles.open(path, index_dir: index_dir)
             file.streams.first
         end
 

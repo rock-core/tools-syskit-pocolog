@@ -63,29 +63,23 @@ module Syskit::Pocolog
         # @param [Deployment] deployment_task the task to register
         # @return [void]
         def register(deployment_task)
-            new_streams = Array.new
+            new_streams = []
             deployment_task.model.each_stream_mapping do |s, _|
                 set = (stream_to_deployment[s] << deployment_task)
-                if set.size == 1
-                    new_streams << s
-                end
+                new_streams << s if set.size == 1
             end
             if stream_aligner.add_streams(*new_streams)
                 _, @time = stream_aligner.step_back
             else
                 reset_replay_base_times
-                if stream_aligner.eof?
-                    @time = end_time
-                else
-                    @time = start_time
-                end
+                @time = stream_aligner.eof? ? end_time : start_time
             end
             reset_replay_base_times
         end
 
         # Deregisters a deployment task
         def deregister(deployment_task)
-            removed_streams = Array.new
+            removed_streams = []
             deployment_task.model.each_stream_mapping do |s, _|
                 set = stream_to_deployment[s]
                 set.delete(deployment_task)
@@ -100,11 +94,7 @@ module Syskit::Pocolog
             if stream_aligner.remove_streams(*removed_streams)
                 _, @time = stream_aligner.step_back
             else
-                if stream_aligner.eof?
-                    @time = end_time
-                else
-                    @time = start_time
-                end
+                @time = stream_aligner.eof? ? end_time : start_time
             end
             reset_replay_base_times
         end
@@ -112,40 +102,38 @@ module Syskit::Pocolog
         # Seek to the given time or sample index
         def seek(time_or_index)
             stream_index, time = stream_aligner.seek(time_or_index, false)
-            if stream_index
-                dispatch(stream_index, time)
-                reset_replay_base_times
-            end
+            return unless stream_index
+
+            dispatch(stream_index, time)
+            reset_replay_base_times
         end
 
         # Process the next sample, and feed it to the relevant deployment(s)
         def step
             stream_index, time = stream_aligner.step
-            if stream_index
-                dispatch(stream_index, time)
-            end
+            dispatch(stream_index, time) if stream_index
         end
 
         # Whether we're doing realtime replay
         def running?
-            !!@handler_id
+            @handler_id
         end
+
+        class StateMismatch < RuntimeError; end
 
         # Start replaying in realtime
         def start(replay_speed: 1)
-            if running?
-                raise RuntimeError, "already running"
-            end
+            raise StateMismatch, 'already running' if running?
+
             reset_replay_base_times
-            @handler_id = execution_engine.add_side_work_handler(description: "syskit-pocolog replay handler for #{self}") do
-                process_in_realtime(replay_speed)
-            end
+            @handler_id = execution_engine.add_side_work_handler(
+                description: "syskit-pocolog replay handler for #{self}"
+            ) { process_in_realtime(replay_speed) }
         end
 
         def stop
-            if !running?
-                raise RuntimeError, "not running"
-            end
+            raise StateMismatch, 'not running' unless running?
+
             execution_engine.remove_side_work_handler(@handler_id)
             @handler_id = nil
         end
@@ -167,27 +155,27 @@ module Syskit::Pocolog
         # @api private
         #
         # Play samples required by the current execution engine's time
-        def process_in_realtime(replay_speed, limit_real_time: end_of_current_engine_cycle)
-            limit_logical_time = base_logical_time + (limit_real_time - base_real_time) * replay_speed
+        def process_in_realtime(replay_speed,
+                                limit_real_time: end_of_current_engine_cycle)
+            limit_logical_time = base_logical_time +
+                                 (limit_real_time - base_real_time) * replay_speed
 
-            while true
+            loop do
                 stream_index, time = stream_aligner.step
-                if !stream_index
-                    return false
-                elsif time > limit_logical_time
+                return false unless stream_index
+
+                if time > limit_logical_time
                     stream_aligner.step_back
                     return true
                 end
 
-                target_real_time = base_real_time + (time - base_logical_time) / replay_speed
+                target_real_time = base_real_time +
+                                   (time - base_logical_time) / replay_speed
                 time_diff = target_real_time - Time.now
-                if time_diff > MIN_TIME_DIFF_TO_SLEEP
-                    sleep(time_diff)
-                end
+                sleep(time_diff) if time_diff > MIN_TIME_DIFF_TO_SLEEP
                 dispatch(stream_index, time)
             end
         end
-
 
         # @api private
         #
@@ -196,11 +184,11 @@ module Syskit::Pocolog
             @time = time
             stream = stream_aligner.streams[stream_index]
             tasks = stream_to_deployment[stream]
-            if !tasks.empty?
-                sample = stream_aligner.single_data(stream_index)
-                tasks.each do |task|
-                    task.process_sample(stream, time, sample)
-                end
+            return if tasks.empty?
+
+            sample = stream_aligner.single_data(stream_index)
+            tasks.each do |task|
+                task.process_sample(stream, time, sample)
             end
         end
 
@@ -213,4 +201,3 @@ module Syskit::Pocolog
         end
     end
 end
-

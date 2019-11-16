@@ -23,7 +23,7 @@ module Syskit::Pocolog
 
                 move_logfile_path (dataset_path + "pocolog").to_s
                 create_logfile 'task0::port.0.log' do
-                    create_logfile_stream 'test', 
+                    create_logfile_stream 'test',
                         metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port']
                 end
                 FileUtils.touch dataset_pathname('text', 'test.txt')
@@ -485,7 +485,7 @@ module Syskit::Pocolog
                 it "expects the pocolog cache files in the dataset's cache directory" do
                     cache_path.mkpath
                     open_logfile logfile_path('task0::port.0.log'), index_dir: (cache_path + "pocolog").to_s
-                    flexmock(Pocolog::Logfiles).new_instances.
+                    flexmock(::Pocolog::Logfiles).new_instances.
                         should_receive(:rebuild_and_load_index).
                         never
                     streams = dataset.each_pocolog_stream.to_a
@@ -500,13 +500,13 @@ module Syskit::Pocolog
                     registry = Typelib::Registry.new
                     @double_t = registry.create_numeric '/double', 8, :float
                     create_logfile 'task0::port.0.log' do
-                        create_logfile_stream 'test', 
+                        create_logfile_stream 'test',
                             metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port']
                         write_logfile_sample base_time, base_time + 10, 1
                         write_logfile_sample base_time + 1, base_time + 20, 2
                     end
                     create_logfile 'task0::other.0.log' do
-                        create_logfile_stream 'other_test', 
+                        create_logfile_stream 'other_test',
                             metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'other'],
                             type: double_t
                         write_logfile_sample base_time + 100, base_time + 300, 3
@@ -532,7 +532,7 @@ module Syskit::Pocolog
 
                 it "sets up the lazy data stream to load the actual stream properly" do
                     lazy_streams = dataset.read_lazy_data_streams
-                    flexmock(Pocolog::Logfiles).new_instances.
+                    flexmock(::Pocolog::Logfiles).new_instances.
                         should_receive(:rebuild_and_load_index).never
                     streams = lazy_streams.map(&:syskit_eager_load)
                     assert_equal ['test', 'other_test'], streams.map(&:name)

@@ -8,4 +8,3 @@ end
 Roby.display_exception do
     CLI.start(['datastore', *ARGV])
 end
-

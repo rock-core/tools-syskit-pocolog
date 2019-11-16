@@ -27,7 +27,7 @@ module Syskit::Pocolog
                 if roby_files.size > 1
                     raise ArgumentError, "more than one Roby event log found"
                 end
-                ignored = pocolog_files.map { |p| Pathname.new(Pocolog::Logfiles.default_index_filename(p.to_s)) }
+                ignored = pocolog_files.map { |p| Pathname.new(::Pocolog::Logfiles.default_index_filename(p.to_s)) }
                 ignored.concat roby_files.map { |p| p.sub(/-events.log$/, '-index.log') }
 
                 all_files = Pathname.enum_for(:glob, dir_path + "*").to_a

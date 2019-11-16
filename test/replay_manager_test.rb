@@ -7,13 +7,16 @@ module Syskit::Pocolog
             double_t = Roby.app.default_loader.registry.get '/double'
 
             create_logfile 'test.0.log' do
-                create_logfile_stream '/port0', type: double_t,
-                    metadata: Hash['rock_task_name' => "task",
-                                   'rock_task_object_name' => 'out',
-                                   'rock_stream_type' => 'port']
+                create_logfile_stream(
+                    '/port0',
+                    type: double_t,
+                    metadata: { 'rock_task_name' => 'task',
+                                'rock_task_object_name' => 'out',
+                                'rock_stream_type' => 'port' }
+                )
             end
-            @streams = Streams.from_dir(logfile_pathname).
-                find_task_by_name('task')
+            @streams = Streams.from_dir(logfile_pathname)
+                              .find_task_by_name('task')
             @port_stream = streams.find_port_by_name('out')
             @task_m = Syskit::TaskContext.new_submodel do
                 output_port 'out', double_t
@@ -22,7 +25,8 @@ module Syskit::Pocolog
             plan = Roby::ExecutablePlan.new
             @subject = ReplayManager.new(plan.execution_engine)
 
-            @deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: task_m, name: 'task')
+            @deployment_m = Syskit::Pocolog::Deployment
+                            .for_streams(streams, model: task_m, name: 'task')
         end
 
         describe "#register" do
@@ -32,7 +36,7 @@ module Syskit::Pocolog
                 other_task = deployment_m.new
                 subject.register(other_task)
                 assert_equal Hash[port_stream => Set[deployment_task, other_task]],
-                    subject.stream_to_deployment
+                             subject.stream_to_deployment
             end
             it "deregisters the stream if no deployment tasks are still using it" do
                 deployment_task = deployment_m.new
@@ -41,20 +45,20 @@ module Syskit::Pocolog
             end
             it "aligns the streams that are managed by the deployment task" do
                 deployment_task = deployment_m.new
-                flexmock(subject.stream_aligner).
-                    should_receive(:add_streams).
-                    with(streams.find_port_by_name('out')).
-                    once
+                flexmock(subject.stream_aligner)
+                    .should_receive(:add_streams)
+                    .with(streams.find_port_by_name('out'))
+                    .once
                 subject.register(deployment_task)
             end
             it "does not realign the streams that are already in-use by another deployment" do
                 deployment_task = deployment_m.new
                 subject.register(deployment_task)
 
-                flexmock(subject.stream_aligner).
-                    should_receive(:add_streams).
-                    with().
-                    once.pass_thru
+                flexmock(subject.stream_aligner)
+                    .should_receive(:add_streams)
+                    .with_no_args
+                    .once.pass_thru
                 other_task = deployment_m.new
                 subject.register(other_task)
             end
@@ -129,23 +133,25 @@ module Syskit::Pocolog
             end
         end
 
-        describe "#process_in_realtime" do
+        describe '#process_in_realtime' do
             before do
                 double_t = Roby.app.default_loader.registry.get '/double'
 
                 create_logfile 'test.0.log' do
-                    stream0 = create_logfile_stream '/port0', type: double_t,
-                        metadata: Hash['rock_task_name' => "task",
-                                       'rock_task_object_name' => 'out',
-                                       'rock_stream_type' => 'port']
+                    stream0 = create_logfile_stream(
+                        '/port0',
+                        type: double_t,
+                        metadata: { 'rock_task_name' => 'task',
+                                    'rock_task_object_name' => 'out',
+                                    'rock_stream_type' => 'port' }
+                    )
                     stream0.write Time.at(0), Time.at(0), 0
                     stream0.write Time.at(0), Time.at(1), 1
                     stream0.write Time.at(0), Time.at(2), 2
                 end
 
-                streams = Streams.from_dir(logfile_pathname).
-                    find_task_by_name('task')
-                port_stream = streams.find_port_by_name('out')
+                streams = Streams.from_dir(logfile_pathname)
+                                 .find_task_by_name('task')
                 task_m = Syskit::TaskContext.new_submodel do
                     output_port 'out', double_t
                 end

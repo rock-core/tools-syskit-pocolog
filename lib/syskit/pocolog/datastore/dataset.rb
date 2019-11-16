@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Syskit::Pocolog
     class Datastore
         # A representation of a set of streams and their metadata
@@ -32,12 +34,12 @@ module Syskit::Pocolog
             # The basename of the file that contains identifying metadata
             #
             # @see write_identifying_metadata
-            BASENAME_IDENTITY_METADATA = "syskit-dataset.yml"
+            BASENAME_IDENTITY_METADATA = 'syskit-dataset.yml'
 
             # The basename of the file that contains identifying metadata
             #
             # @see write_identifying_metadata
-            BASENAME_METADATA = "syskit-metadata.yml"
+            BASENAME_METADATA = 'syskit-metadata.yml'
 
             IdentityEntry = Struct.new :path, :size, :sha2
 
@@ -74,9 +76,7 @@ module Syskit::Pocolog
             #   Returns a Digest object that can be used to digest data
             def self.digest(string = nil)
                 digest = Digest::SHA256.new
-                if string
-                    digest.update(string)
-                end
+                digest.update(string) if string
                 digest
             end
 
@@ -86,9 +86,7 @@ module Syskit::Pocolog
             # @overload string_digest(string)
             #   Computes the string representation of a string's digest
             def self.string_digest(object)
-                if object.respond_to?(:to_str)
-                    object = digest(object)
-                end
+                object = digest(object) if object.respond_to?(:to_str)
                 object.send(DIGEST_ENCODING_METHOD)
             end
 
@@ -99,9 +97,12 @@ module Syskit::Pocolog
             #   format
             def digest_from_path
                 digest = dataset_path.basename.to_s
-                begin self.class.validate_encoded_sha2(digest)
+                begin
+                    self.class.validate_encoded_sha2(digest)
                 rescue InvalidDigest => e
-                    raise InvalidPath, "#{dataset_path}'s name does not look like a valid digest: #{e.message}"
+                    raise InvalidPath,
+                          "#{dataset_path}'s name does not look like a valid "\
+                          "digest: #{e.message}"
                 end
                 digest
             end
@@ -114,8 +115,9 @@ module Syskit::Pocolog
             def compute_dataset_identity_from_files
                 each_important_file.map do |path|
                     sha2 = path.open do |io|
-                        if path.dirname.basename.to_s == 'pocolog' # Pocolog files do not hash their prologue
-                            io.seek(Pocolog::Format::Current::PROLOGUE_SIZE)
+                        # Pocolog files do not hash their prologue
+                        if path.dirname.basename.to_s == 'pocolog'
+                            io.seek(::Pocolog::Format::Current::PROLOGUE_SIZE)
                         end
                         compute_file_sha2(io)
                     end
@@ -125,9 +127,15 @@ module Syskit::Pocolog
 
             def self.validate_encoded_short_digest(digest)
                 if digest.length > ENCODED_DIGEST_LENGTH
-                    raise InvalidDigest, "#{digest} does not look like a valid SHA2 short digest encoded with #{DIGEST_ENCODING_METHOD}. Expected at most #{ENCODED_DIGEST_LENGTH} characters but got #{digest.length}"
+                    raise InvalidDigest,
+                          "#{digest} does not look like a valid SHA2 short digest "\
+                          "encoded with #{DIGEST_ENCODING_METHOD}. Expected at most "\
+                          "#{ENCODED_DIGEST_LENGTH} characters but got #{digest.length}"
                 elsif digest !~ /^[0-9a-f]+$/
-                    raise InvalidDigest, "#{digest} does not look like a valid SHA2 digest encoded with #{DIGEST_ENCODING_METHOD}. Expected characters in 0-9a-zA-Z+"
+                    raise InvalidDigest,
+                          "#{digest} does not look like a valid SHA2 digest encoded "\
+                          "with #{DIGEST_ENCODING_METHOD}. "\
+                          'Expected characters in 0-9a-zA-Z+'
                 end
                 digest
             end
@@ -140,14 +148,20 @@ module Syskit::Pocolog
             # with {DIGEST_ENCODING_METHOD}
             def self.validate_encoded_sha2(sha2)
                 if sha2.length != ENCODED_DIGEST_LENGTH
-                    raise InvalidDigest, "#{sha2} does not look like a valid SHA2 digest encoded with #{DIGEST_ENCODING_METHOD}. Expected #{ENCODED_DIGEST_LENGTH} characters but got #{sha2.length}"
+                    raise InvalidDigest,
+                          "#{sha2} does not look like a valid SHA2 digest encoded "\
+                          "with #{DIGEST_ENCODING_METHOD}. Expected "\
+                          "#{ENCODED_DIGEST_LENGTH} characters but got #{sha2.length}"
                 elsif sha2 !~ /^[0-9a-f]+$/
-                    raise InvalidDigest, "#{sha2} does not look like a valid SHA2 digest encoded with #{DIGEST_ENCODING_METHOD}. Expected characters in 0-9a-zA-Z+/"
+                    raise InvalidDigest,
+                          "#{sha2} does not look like a valid SHA2 digest encoded "\
+                          "with #{DIGEST_ENCODING_METHOD}. "\
+                          'Expected characters in 0-9a-zA-Z+/'
                 end
                 sha2
             end
 
-            # Load the dataset identity information from the metadata file 
+            # Load the dataset identity information from the metadata file
             #
             # It does sanity checks on the loaded data, but does not compare it
             # against the actual data on disk
@@ -155,38 +169,53 @@ module Syskit::Pocolog
             # @return [Hash<Pathname,(String,Integer)>]
             def read_dataset_identity_from_metadata_file
                 metadata_path = (dataset_path + BASENAME_IDENTITY_METADATA)
-                identity_metadata = (YAML.load(metadata_path.read) || Hash.new)
+                identity_metadata = (YAML.safe_load(metadata_path.read) || {})
                 if identity_metadata['layout_version'] != LAYOUT_VERSION
-                    raise InvalidLayoutVersion, "layout version in #{dataset_path} is #{identity_metadata['layout_version']}, expected #{LAYOUT_VERSION}"
+                    raise InvalidLayoutVersion,
+                          "layout version in #{dataset_path} is "\
+                          "#{identity_metadata['layout_version']}, "\
+                          "expected #{LAYOUT_VERSION}"
                 end
                 digests = identity_metadata['identity']
                 if !digests
-                    raise InvalidIdentityMetadata, "no 'identity' field in #{metadata_path}"
+                    raise InvalidIdentityMetadata,
+                          "no 'identity' field in #{metadata_path}"
                 elsif !digests.respond_to?(:to_ary)
-                    raise InvalidIdentityMetadata, "the 'identity' field in #{metadata_path} is not an array"
+                    raise InvalidIdentityMetadata,
+                          "the 'identity' field in #{metadata_path} is not an array"
                 end
                 digests = digests.map do |path_info|
                     if !path_info['path'].respond_to?(:to_str)
-                        raise InvalidIdentityMetadata, "found non-string value for field 'path' in #{metadata_path}"
+                        raise InvalidIdentityMetadata,
+                              "found non-string value for field 'path' "\
+                              "in #{metadata_path}"
                     elsif !path_info['size'].kind_of?(Integer)
-                        raise InvalidIdentityMetadata, "found non-integral value for field 'size' in #{metadata_path}"
+                        raise InvalidIdentityMetadata,
+                              "found non-integral value for field 'size' "\
+                              "in #{metadata_path}"
                     elsif !path_info['sha2'].respond_to?(:to_str)
-                        raise InvalidIdentityMetadata, "found non-string value for field 'sha2' in #{metadata_path}"
+                        raise InvalidIdentityMetadata,
+                              "found non-string value for field 'sha2' "\
+                              "in #{metadata_path}"
                     end
 
                     begin
                         self.class.validate_encoded_sha2(path_info['sha2'])
                     rescue InvalidDigest => e
-                        raise InvalidIdentityMetadata, "value of field 'sha2' in #{metadata_path} does not look like a valid SHA2 digest: #{e.message}"
+                        raise InvalidIdentityMetadata,
+                              "value of field 'sha2' in #{metadata_path} does "\
+                              "not look like a valid SHA2 digest: #{e.message}"
                     end
 
                     path = Pathname.new(path_info['path'].to_str)
                     if path.each_filename.find { |p| p == '..' }
-                        raise InvalidIdentityMetadata, "found path #{path} not within the dataset"
+                        raise InvalidIdentityMetadata,
+                              "found path #{path} not within the dataset"
                     end
-                    IdentityEntry.new(dataset_path + path,
-                                      Integer(path_info['size']),
-                                      path_info['sha2'].to_str)
+                    IdentityEntry.new(
+                        dataset_path + path, Integer(path_info['size']),
+                        path_info['sha2'].to_str
+                    )
                 end
                 digests
             end
@@ -196,7 +225,7 @@ module Syskit::Pocolog
             # Compute the encoded SHA2 digest of a file
             def compute_file_sha2(io)
                 digest = Dataset.digest
-                while block = io.read(1024 * 1024)
+                while (block = io.read(1024 * 1024))
                     digest.update(block)
                 end
                 Dataset.string_digest(digest)
@@ -206,104 +235,130 @@ module Syskit::Pocolog
             #
             # It really only computes the data from the data in the metadata file,
             # but does not validate it against the data on-disk
-            def compute_dataset_digest(dataset_identity = read_dataset_identity_from_metadata_file)
+            def compute_dataset_digest(
+                dataset_identity = read_dataset_identity_from_metadata_file
+            )
                 dataset_digest_data = dataset_identity.map do |entry|
                     path = entry.path.relative_path_from(dataset_path).to_s
                     [path, entry.size, entry.sha2]
                 end
-                dataset_digest_data = dataset_digest_data.
-                    sort_by { |path, _| path }.
-                    map do |path, size, sha2|
-                        "#{sha2} #{size} #{path}"
-                    end.
-                    join("\n")
+                dataset_digest_data =
+                    dataset_digest_data
+                    .sort_by { |path, _| path }
+                    .map { |path, size, sha2| "#{sha2} #{size} #{path}" }
+                    .join('\n')
                 Dataset.string_digest(dataset_digest_data)
             end
 
             # Enumerate the file's in a dataset that are considered 'important',
             # that is are part of the dataset's identity
             def each_important_file
-                return enum_for(__method__) if !block_given?
-                Pathname.glob(dataset_path + "pocolog" + "*.*.log") do |path|
+                return enum_for(__method__) unless block_given?
+
+                Pathname.glob(dataset_path + 'pocolog' + '*.*.log') do |path|
                     yield(path)
                 end
-                Pathname.glob(dataset_path + "*-events.log") do |path|
+                Pathname.glob(dataset_path + '*-events.log') do |path|
                     yield(path)
                 end
             end
 
             # Fully validate the dataset's identity metadata
             def validate_identity_metadata
-                precomputed = read_dataset_identity_from_metadata_file.inject(Hash.new) do |h, entry|
-                    h.merge!(entry.path => entry)
-                end
-                actual      = compute_dataset_identity_from_files
+                precomputed = read_dataset_identity_from_metadata_file
+                              .inject({}) { |h, entry| h.merge!(entry.path => entry) }
+                actual = compute_dataset_identity_from_files
 
                 actual.each do |entry|
-                    if metadata_entry = precomputed.delete(entry.path)
-                        if metadata_entry != entry
-                            raise InvalidIdentityMetadata, "metadata mismatch between metadata file (#{metadata_entry.to_h}) and state on-disk (#{entry.to_h})"
-                        end
-                    else
-                        raise InvalidIdentityMetadata, "#{entry.path} is present on disk and missing in the metadata file"
+                    unless (metadata_entry = precomputed.delete(entry.path))
+                        raise InvalidIdentityMetadata,
+                              "#{entry.path} is present on disk and "\
+                              'missing in the metadata file'
+                    end
+
+                    if metadata_entry != entry
+                        raise InvalidIdentityMetadata,
+                              'metadata mismatch between metadata file '\
+                              "(#{metadata_entry.to_h}) and state on-disk "\
+                              "(#{entry.to_h})"
                     end
                 end
 
-                if !precomputed.empty?
-                    raise InvalidIdentityMetadata, "#{precomputed.size} files are listed in the dataset identity metadata, but are not present on disk: #{precomputed.keys.map(&:to_s).join(", ")}"
-                end
+                return if precomputed.empty?
+
+                raise InvalidIdentityMetadata,
+                      "#{precomputed.size} files are listed in the dataset "\
+                      'identity metadata, but are not present on disk: '\
+                      "#{precomputed.keys.map(&:to_s).join(', ')}"
             end
 
             # Fast validation of the dataset's identity information
             #
             # It does all the checks possible, short of actually recomputing the
             # file's digests
-            def weak_validate_identity_metadata(dataset_identity = read_dataset_identity_from_metadata_file)
+            def weak_validate_identity_metadata(
+                dataset_identity = read_dataset_identity_from_metadata_file
+            )
                 # Verify the identity's format itself
                 dataset_identity.each do |entry|
                     Integer(entry.size)
                     self.class.validate_encoded_sha2(entry.sha2)
                 end
 
-                important_files = each_important_file.inject(Hash.new) do |h, path|
+                important_files = each_important_file.inject({}) do |h, path|
                     h.merge!(path => path.size)
                 end
 
                 dataset_identity.each do |entry|
-                    actual_size = important_files.delete(entry.path)
-                    if !actual_size
-                        raise InvalidIdentityMetadata, "file #{entry.path} is listed in the identity metadata, but is not present on disk"
-                    elsif actual_size != entry.size
-                        raise InvalidIdentityMetadata, "file #{entry.size} is listed in the identity metadata with a size of #{entry.size} bytes, but the file present on disk has a size of #{actual_size}"
+                    unless (actual_size = important_files.delete(entry.path))
+                        raise InvalidIdentityMetadata,
+                              "file #{entry.path} is listed in the identity metadata, "\
+                              'but is not present on disk'
+                    end
+
+                    if actual_size != entry.size
+                        raise InvalidIdentityMetadata,
+                              "file #{entry.size} is listed in the identity metadata "\
+                              "with a size of #{entry.size} bytes, but the file "\
+                              "present on disk has a size of #{actual_size}"
                     end
                 end
 
-                if !important_files.empty?
-                    raise InvalidIdentityMetadata, "#{important_files.size} important files are present on disk but are not listed in the identity metadata: #{important_files.keys.sort.join(", ")}"
-                end
+                return if important_files.empty?
+
+                raise InvalidIdentityMetadata,
+                      "#{important_files.size} important files are present on disk "\
+                      'but are not listed in the identity metadata: '\
+                      "#{important_files.keys.sort.join(', ')}"
             end
 
             # Write the dataset's static metadata
             #
             # This is the metadata that is used to identify and verify the integrity
             # of the dataset
-            def write_dataset_identity_to_metadata_file(dataset_identity = compute_dataset_identity_from_files)
+            def write_dataset_identity_to_metadata_file(
+                dataset_identity = compute_dataset_identity_from_files
+            )
                 dataset_digest = compute_dataset_digest(dataset_identity)
                 dataset_identity = dataset_identity.map do |entry|
                     relative_path = entry.path.relative_path_from(dataset_path)
-                    if relative_path.each_filename.find { |p| p == ".." }
-                        raise InvalidIdentityMetadata, "found path #{entry.path} not within the dataset"
+                    if relative_path.each_filename.find { |p| p == '..' }
+                        raise InvalidIdentityMetadata,
+                              "found path #{entry.path} not within the dataset"
                     end
                     size = begin Integer(entry.size)
                            rescue ArgumentError => e
-                               raise InvalidIdentityMetadata, "#{entry.size} is not a valid file size"
+                               raise InvalidIdentityMetadata,
+                                     "#{entry.size} is not a valid file size"
                            end
                     if size < 0
-                        raise InvalidIdentityMetadata, "#{entry.size} is not a valid file size"
+                        raise InvalidIdentityMetadata,
+                              "#{entry.size} is not a valid file size"
                     end
                     sha2 = begin self.class.validate_encoded_sha2(entry.sha2)
                            rescue InvalidDigest
-                               raise InvalidIdentityMetadata, "#{entry.sha2} is not a valid digest"
+                               raise InvalidIdentityMetadata,
+                                     "#{entry.sha2} is not a valid digest"
                            end
 
                     Hash['path' => relative_path.to_s,
@@ -323,7 +378,7 @@ module Syskit::Pocolog
 
             # Reset all metadata associated with this dataset
             def metadata_reset
-                @metadata = Hash.new
+                @metadata = {}
             end
 
             # Resets a metadata value
@@ -333,7 +388,7 @@ module Syskit::Pocolog
 
             # Add a new metadata value
             def metadata_add(key, *values)
-                metadata.merge!(key => values.to_set) do |k, v1, v2|
+                metadata.merge!(key => values.to_set) do |_, v1, v2|
                     v1.merge(v2)
                 end
             end
@@ -351,12 +406,15 @@ module Syskit::Pocolog
                                  elsif default_value.size == 1
                                      [default_value]
                                  else
-                                     raise ArgumentError, "expected zero or one default value, got #{default_value.size}"
+                                     raise ArgumentError,
+                                           'expected zero or one default value, '\
+                                           "got #{default_value.size}"
                                  end
 
                 value = metadata.fetch(key, *default_values)
                 if value.size > 1
-                    raise MultipleValues, "multiple values found for #{key}. Use metadata_fetch_all"
+                    raise MultipleValues,
+                          "multiple values found for #{key}. Use metadata_fetch_all"
                 end
                 value.first
             rescue KeyError
@@ -392,14 +450,14 @@ module Syskit::Pocolog
                 if path.exist?
                     metadata_read_from_file
                 else
-                    @metadata = Hash.new
+                    @metadata = {}
                 end
             end
 
             # Re-read the metadata from file, resetting the current metadata
             def metadata_read_from_file
-                loaded = YAML.load((dataset_path + BASENAME_METADATA).read)
-                @metadata = loaded.inject(Hash.new) do |h, (k, v) |
+                loaded = YAML.safe_load((dataset_path + BASENAME_METADATA).read)
+                @metadata = loaded.inject({}) do |h, (k, v)|
                     h.merge!(k => v.to_set)
                 end
             end
@@ -408,7 +466,7 @@ module Syskit::Pocolog
             #
             # It is written in the root of the dataset, as {BASENAME_METADATA}
             def metadata_write_to_file
-                dumped = metadata.inject(Hash.new) do |h, (k, v)|
+                dumped = metadata.inject({}) do |h, (k, v)|
                     h.merge!(k => v.to_a)
                 end
                 (dataset_path + BASENAME_METADATA).open('w') do |io|
@@ -417,8 +475,9 @@ module Syskit::Pocolog
             end
 
             def each_pocolog_path
-                return enum_for(__method__) if !block_given?
-                Pathname.glob(dataset_path + 'pocolog' + "*.log") do |logfile_path|
+                return enum_for(__method__) unless block_given?
+
+                Pathname.glob(dataset_path + 'pocolog' + '*.log') do |logfile_path|
                     yield(logfile_path)
                 end
             end
@@ -428,10 +487,13 @@ module Syskit::Pocolog
             # @yieldparam [Pocolog::Datastream] stream
             # @see each_pocolog_lazy_stream
             def each_pocolog_stream
-                return enum_for(__method__) if !block_given?
-                pocolog_index_dir = (cache_path + "pocolog").to_s
+                return enum_for(__method__) unless block_given?
+
+                pocolog_index_dir = (cache_path + 'pocolog').to_s
                 each_pocolog_path do |logfile_path|
-                    logfile = Pocolog::Logfiles.open(logfile_path, index_dir: pocolog_index_dir, silent: true)
+                    logfile = ::Pocolog::Logfiles.open(
+                        logfile_path, index_dir: pocolog_index_dir, silent: true
+                    )
                     yield(logfile.streams.first)
                 end
             end
@@ -440,15 +502,17 @@ module Syskit::Pocolog
             #
             # Load lazy data stream information from disk
             def read_lazy_data_streams
-                pocolog_index_dir = (cache_path + "pocolog").to_s
-                Pathname.enum_for(:glob, dataset_path + "pocolog" + "*.log").map do |logfile_path|
-                    index_path = Pocolog::Logfiles.default_index_filename(
-                        logfile_path.to_s, index_dir: pocolog_index_dir.to_s)
+                pocolog_index_dir = (cache_path + 'pocolog').to_s
+                Pathname.enum_for(:glob, dataset_path + 'pocolog' + '*.log').map do |logfile_path|
+                    index_path = ::Pocolog::Logfiles.default_index_filename(
+                        logfile_path.to_s, index_dir: pocolog_index_dir.to_s
+                    )
                     index_path = Pathname.new(index_path)
                     logfile_path.open do |file_io|
                         index_path.open do |index_io|
-                            stream_info = Pocolog::Format::Current.
-                                read_minimal_stream_info(index_io, file_io)
+                            stream_info =
+                                Pocolog::Format::Current
+                                .read_minimal_stream_info(index_io, file_io)
                             stream_block, index_stream_info = stream_info.first
 
                             interval_rt = index_stream_info.interval_rt.map do |t|
@@ -466,7 +530,8 @@ module Syskit::Pocolog
                                 stream_block.metadata,
                                 interval_rt,
                                 interval_lg,
-                                index_stream_info.stream_size)
+                                index_stream_info.stream_size
+                            )
                         end
                     end
                 end
@@ -479,10 +544,10 @@ module Syskit::Pocolog
             #
             # @yieldparam [LazyDataStream] stream
             # @see each_pocolog_stream
-            def each_pocolog_lazy_stream
-                return enum_for(__method__) if !block_given?
-                (@lazy_data_streams ||= read_lazy_data_streams).
-                    each(&proc)
+            def each_pocolog_lazy_stream(&block)
+                return enum_for(__method__) unless block_given?
+
+                (@lazy_data_streams ||= read_lazy_data_streams).each(&block)
             end
 
             # Enumerate the streams per task
@@ -490,17 +555,30 @@ module Syskit::Pocolog
             # @yieldparam [TaskStreams]
             #
             # @param (see Streams#each_task)
-            def each_task(load_models: true, skip_tasks_without_models: true, raise_on_missing_task_models: false, loader: Roby.app.default_loader, &block)
-                if !block_given?
-                    return enum_for(__method__, load_models: load_models,
-                                    skip_tasks_without_models: skip_tasks_without_models,
-                                    raise_on_missing_task_models: raise_on_missing_task_models,
-                                    loader: loader) 
+            def each_task(
+                load_models: true,
+                skip_tasks_without_models: true,
+                raise_on_missing_task_models: false,
+                loader: Roby.app.default_loader, &block
+            )
+                unless block_given?
+                    return enum_for(
+                        __method__,
+                        load_models: load_models,
+                        skip_tasks_without_models: skip_tasks_without_models,
+                        raise_on_missing_task_models: raise_on_missing_task_models,
+                        loader: loader
+                    )
                 end
-                Streams.new(each_pocolog_lazy_stream.to_a).
-                    each_task(load_models: load_models, skip_tasks_without_models: skip_tasks_without_models, raise_on_missing_task_models: raise_on_missing_task_models, &block)
+                Streams.new(each_pocolog_lazy_stream.to_a)
+                       .each_task(
+                           load_models: load_models,
+                           skip_tasks_without_models: skip_tasks_without_models,
+                           raise_on_missing_task_models: raise_on_missing_task_models,
+                           loader: loader,
+                           &block
+                       )
             end
         end
     end
 end
-

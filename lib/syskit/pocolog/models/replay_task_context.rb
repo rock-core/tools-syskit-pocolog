@@ -19,7 +19,7 @@ module Syskit
                 # Returns the {ReplayTaskContext} model that should be used to
                 # replay tasks of the given orogen model
                 def model_for(orogen_model)
-                    if model = find_model_by_orogen(orogen_model)
+                    if (model = find_model_by_orogen(orogen_model))
                         model
                     else
                         define_from_orogen(orogen_model, register: true)
@@ -41,11 +41,15 @@ module Syskit
 
                     # We want to "copy" the services (dynamic and plain) from
                     # the plain model
-                    if plain_model = Syskit::TaskContext.find_model_by_orogen(submodel.orogen_model)
+                    plain_model = Syskit::TaskContext
+                                  .find_model_by_orogen(submodel.orogen_model)
+                    if plain_model
                         submodel.instance_variable_set :@plain_task_context, plain_model
                         submodel.copy_services_from_plain_model(plain_model)
                     else
-                        submodel.instance_variable_set :@plain_task_context, Syskit::TaskContext
+                        submodel.instance_variable_set(
+                            :@plain_task_context, Syskit::TaskContext
+                        )
                     end
                 end
 
@@ -62,7 +66,6 @@ module Syskit
                     end
                 end
 
-
                 # Reimplemented to make ReplayTaskContext fullfills?
                 # {#plain_task_context}
                 def fullfills?(model)
@@ -70,13 +73,13 @@ module Syskit
                 end
 
                 def each_fullfilled_model
-                    return enum_for(__method__) if !block_given?
+                    return enum_for(__method__) unless block_given?
 
                     super
+
                     yield(plain_task_context)
                 end
             end
         end
     end
 end
-

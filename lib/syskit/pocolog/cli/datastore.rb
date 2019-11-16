@@ -209,7 +209,7 @@ module Syskit::Pocolog
                         reporter.info "#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again"
                         next
                     end
-                    
+
                     datastore.in_incoming do |core_path, cache_path|
                         importer = Syskit::Pocolog::Datastore::Import.new(datastore)
                         dataset = importer.normalize_dataset(p, core_path, cache_path: cache_path, silent: options[:silent])

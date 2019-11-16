@@ -51,10 +51,10 @@ module Syskit::Pocolog
             end
 
             def initialize
-                @out_files = Hash.new
+                @out_files = {}
             end
 
-            def normalize(paths, output_path: paths.first.dirname + "normalized", index_dir: output_path, reporter: Pocolog::CLI::NullReporter.new, compute_sha256: false)
+            def normalize(paths, output_path: paths.first.dirname + 'normalized', index_dir: output_path, reporter: Pocolog::CLI::NullReporter.new, compute_sha256: false)
                 output_path.mkpath
                 paths.each do |logfile_path|
                     e, out_io = normalize_logfile(logfile_path, output_path, reporter: reporter, compute_sha256: compute_sha256)
@@ -65,10 +65,8 @@ module Syskit::Pocolog
                             wio = output.wio
                             wio.close
                             Pathname.new(wio.path).unlink
-                            index_path = Pathname.new(Pocolog::Logfiles.default_index_filename(wio.path, index_dir: index_dir))
-                            if index_path.exist?
-                                index_path.unlink
-                            end
+                            index_path = Pathname.new(::Pocolog::Logfiles.default_index_filename(wio.path, index_dir: index_dir))
+                            index_path.unlink if index_path.exist?
                         end
                         raise e
                     end
@@ -78,17 +76,17 @@ module Syskit::Pocolog
                 index_dir.mkpath
                 out_files.each_value do |output|
                     wio = output.wio
-                    block_stream = Pocolog::BlockStream.new(wio)
-                    raw_stream_info = Pocolog::IndexBuilderStreamInfo.new(output.stream_block_pos, output.index_map)
-                    stream_info = Pocolog.create_index_from_raw_info(block_stream, [raw_stream_info])
-                    index_path = Pocolog::Logfiles.default_index_filename(output.path, index_dir: index_dir)
+                    block_stream = ::Pocolog::BlockStream.new(wio)
+                    raw_stream_info = ::Pocolog::IndexBuilderStreamInfo.new(output.stream_block_pos, output.index_map)
+                    stream_info = ::Pocolog.create_index_from_raw_info(block_stream, [raw_stream_info])
+                    index_path = ::Pocolog::Logfiles.default_index_filename(output.path, index_dir: index_dir)
                     File.open(index_path, 'w') do |io|
-                        Pocolog::Format::Current.write_index(io, block_stream.io, stream_info)
+                        ::Pocolog::Format::Current.write_index(io, block_stream.io, stream_info)
                     end
                 end
 
                 if compute_sha256
-                    result = Hash.new
+                    result = {}
                     out_files.each_value.map { |output| result[output.path] = output.digest }
                     result
                 else
@@ -128,7 +126,7 @@ module Syskit::Pocolog
                     reporter.current = in_io.size + reporter_offset
                     return nil, Array.new
                 end
-                
+
                 control_blocks = String.new
                 followup_stream_time = Array.new
                 in_streams = Array.new
