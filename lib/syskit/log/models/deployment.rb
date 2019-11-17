@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Syskit::Log
     module Models
         # Metamodel for {Syskit::Log::Deployment}
@@ -13,7 +15,12 @@ module Syskit::Log
             attr_reader :streams_to_port
 
             # Define a deployment model that will manage the given streams
-            def for_streams(streams, name: streams.task_name, model: streams.replay_model, allow_missing: true)
+            def for_streams(
+                streams,
+                name: streams.task_name,
+                model: streams.replay_model,
+                allow_missing: true
+            )
                 deployment_model = new_submodel(name: "Deployment::Pocolog::#{name}") do
                     task name, model.orogen_model
                 end
@@ -38,18 +45,24 @@ module Syskit::Log
             # Callback called by metaruby in {#new_submodel}
             def setup_submodel(submodel, **options, &block)
                 super
-                if orogen_model = submodel.each_orogen_deployed_task_context_model.first
-                    submodel.instance_variable_set :@task_model,
-                        Syskit::Log::ReplayTaskContext.model_for(orogen_model.task_model)
-                    submodel.instance_variable_set :@streams_to_port, Hash.new
-                end
+
+                orogen_model = submodel.each_orogen_deployed_task_context_model.first
+                return unless orogen_model
+
+                submodel.instance_variable_set(
+                    :@task_model,
+                    Syskit::Log::ReplayTaskContext.model_for(orogen_model.task_model)
+                )
+                submodel.instance_variable_set :@streams_to_port, {}
             end
 
             def each_deployed_task_model
-                return enum_for(__method__) if !block_given?
+                return enum_for(__method__) unless block_given?
 
                 super do |name, plain_task_model|
-                    yield name, Syskit::TaskContext.model_for(plain_task_model.orogen_model)
+                    syskit_model = Syskit::TaskContext
+                                   .model_for(plain_task_model.orogen_model)
+                    yield(name, syskit_model)
                 end
             end
 
@@ -68,20 +81,26 @@ module Syskit::Log
             #   output is connected with no associated stream
             def add_streams_from(streams, allow_missing: true)
                 task_model.each_output_port do |p|
-                    p_stream = streams.find_port_by_name(p.name)
-                    if !p_stream
-                        if allow_missing
-                            ports = streams.each_port_stream.map { |name, _| name }
-                            if ports.empty?
-                                Syskit::Log.warn "no log stream available for #{p}, ignored as allow_missing is true (there are no log streams for the underlying task)"
-                            else
-                                Syskit::Log.warn "no log stream available for #{p}, ignored as allow_missing is true (known ports are #{ports.sort.join(", ")}"
-                            end
-                        else
-                            raise MissingStream, "no stream named #{p.name}"
-                        end
-                    else
+                    if (p_stream = streams.find_port_by_name(p.name))
                         add_stream(p_stream, p)
+                        next
+                    end
+
+                    raise MissingStream, "no stream named #{p.name}" unless allow_missing
+
+                    ports = streams.each_port_stream.map { |name, _| name }
+                    if ports.empty?
+                        Syskit::Log.warn(
+                            "no log stream available for #{p}, ignored "\
+                            'as allow_missing is true (there are no log '\
+                            'streams for the underlying task)'
+                        )
+                    else
+                        Syskit::Log.warn(
+                            "no log stream available for #{p}, ignored "\
+                            'as allow_missing is true, known ports are: '\
+                            "#{ports.sort.join(', ')}"
+                        )
                     end
                 end
             end
@@ -96,11 +115,16 @@ module Syskit::Log
             # @raise ArgumentError if the port is not an output port
             # @raise ArgumentError if the port is not from {#task_model}
             # @raise MismatchingType if the port and stream have differing types
-            def add_stream(stream, port = task_model.port_by_name(stream.metadata['rock_task_object_name']))
+            def add_stream(
+                stream,
+                port = task_model.port_by_name(stream.metadata['rock_task_object_name'])
+            )
                 if !port.output?
-                    raise ArgumentError, "cannot map a log stream to an input port"
+                    raise ArgumentError, 'cannot map a log stream to an input port'
                 elsif port.component_model != task_model
-                    raise ArgumentError, "#{self} deploys #{task_model} but the stream mapping is for #{port.component_model}"
+                    raise ArgumentError,
+                          "#{self} deploys #{task_model} but the stream mapping "\
+                          "is for #{port.component_model}"
                 elsif port.type != stream.type
                     raise MismatchingType.new(stream, port)
                 end
@@ -118,6 +142,3 @@ module Syskit::Log
         end
     end
 end
-
-
-

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'syskit/log/datastore/normalize'
 require 'pocolog/cli/tty_reporter'
 
@@ -11,7 +13,7 @@ module Syskit::Log
         class Import
             class DatasetAlreadyExists < RuntimeError; end
 
-            BASENAME_IMPORT_TAG = ".syskit-pocolog-import"
+            BASENAME_IMPORT_TAG = '.syskit-pocolog-import'
 
             attr_reader :datastore
             def initialize(datastore)
@@ -22,27 +24,35 @@ module Syskit::Log
             # import
             def prepare_import(dir_path)
                 pocolog_files = Syskit::Log.logfiles_in_dir(dir_path)
-                text_files    = Pathname.glob(dir_path + "*.txt")
-                roby_files    = Pathname.glob(dir_path + "*-events.log")
+                text_files    = Pathname.glob(dir_path + '*.txt')
+                roby_files    = Pathname.glob(dir_path + '*-events.log')
                 if roby_files.size > 1
-                    raise ArgumentError, "more than one Roby event log found"
+                    raise ArgumentError, 'more than one Roby event log found'
                 end
-                ignored = pocolog_files.map { |p| Pathname.new(Pocolog::Logfiles.default_index_filename(p.to_s)) }
-                ignored.concat roby_files.map { |p| p.sub(/-events.log$/, '-index.log') }
 
-                all_files = Pathname.enum_for(:glob, dir_path + "*").to_a
-                remaining = (all_files - pocolog_files - text_files - roby_files - ignored)
-                return pocolog_files, text_files, roby_files.first, remaining
+                ignored = pocolog_files.map do |p|
+                    Pathname.new(Pocolog::Logfiles.default_index_filename(p.to_s))
+                end
+                ignored.concat(roby_files.map { |p| p.sub(/-events.log$/, '-index.log') })
+
+                all_files = Pathname.enum_for(:glob, dir_path + '*').to_a
+                remaining = (all_files - pocolog_files -
+                             text_files - roby_files - ignored)
+                [pocolog_files, text_files, roby_files.first, remaining]
             end
 
             # Import a dataset into the store
             #
             # @param [Pathname] dir_path the input directory
             # @return [Pathname] the directory of the imported dataset in the store
-            def import(dir_path, silent: false, force: false)
+            def import(dir_path, force: false, reporter: CLI::NullReporter.new)
                 datastore.in_incoming do |core_path, cache_path|
-                    dataset = normalize_dataset(dir_path, core_path, cache_path: cache_path, silent: silent)
-                    move_dataset_to_store(dir_path, dataset, force: force, silent: silent)
+                    dataset = normalize_dataset(
+                        dir_path, core_path, cache_path: cache_path, reporter: reporter
+                    )
+                    move_dataset_to_store(
+                        dir_path, dataset, force: force, reporter: reporter
+                    )
                 end
             end
 
@@ -52,10 +62,10 @@ module Syskit::Log
             #   imported, the time and digest of the import. Otherwise, returns nil
             def self.find_import_info(path)
                 info_path = (path + BASENAME_IMPORT_TAG)
-                if info_path.exist?
-                    info = YAML.load(info_path.read)
-                    return info['sha2'], info['time']
-                end
+                return unless info_path.exist?
+
+                info = YAML.safe_load(info_path.read, [Time])
+                [info['sha2'], info['time']]
             end
 
             # Move the given dataset to the store
@@ -69,17 +79,19 @@ module Syskit::Log
             # @return [Pathname] the path to the new dataset in the store
             # @raise DatasetAlreadyExists if a dataset already exists with the same
             #   ID than the new one and 'force' is false
-            def move_dataset_to_store(dir_path, dataset, force: false, silent: false)
+            def move_dataset_to_store(dir_path, dataset,
+                                      force: false, reporter: TTY::NullReporter.new)
                 dataset_digest = dataset.compute_dataset_digest
 
                 if datastore.has?(dataset_digest)
                     if force
                         datastore.delete(dataset_digest)
-                        if !silent
-                            warn "Replacing existing dataset #{dataset_digest} with new one"
-                        end
+                        reporter.warn "Replacing existing dataset #{dataset_digest} "\
+                                      'with new one'
                     else
-                        raise DatasetAlreadyExists, "a dataset identical to #{dataset.dataset_path} already exists in the store (computed digest is #{dataset_digest})"
+                        raise DatasetAlreadyExists,
+                              "a dataset identical to #{dataset.dataset_path} already "\
+                              "exists in the store (computed digest is #{dataset_digest})"
                     end
                 end
 
@@ -105,49 +117,53 @@ module Syskit::Log
             # @param [Pathname] dir_path the input directory
             # @param [Pathname] output_dir_path the output directory
             # @return [Dataset] the resulting dataset
-            def normalize_dataset(dir_path, output_dir_path, cache_path: output_dir_path, silent: false)
+            def normalize_dataset(dir_path,
+                                  output_dir_path,
+                                  cache_path: output_dir_path,
+                                  reporter: CLI::NullReporter.new)
                 pocolog_files, text_files, roby_event_log, ignored_entries =
                     prepare_import(dir_path)
 
-                if !silent
-                    puts "Normalizing pocolog log files"
-                end
-                pocolog_digests = normalize_pocolog_files(output_dir_path, pocolog_files, silent: silent, cache_path: cache_path)
+                reporter.info 'Normalizing pocolog log files'
+                pocolog_digests = normalize_pocolog_files(
+                    output_dir_path, pocolog_files,
+                    cache_path: cache_path,
+                    reporter: reporter
+                )
 
                 if roby_event_log
-                    if !silent
-                        puts "Copying the Roby event log"
-                    end
-                    roby_digests    = copy_roby_event_log(output_dir_path, roby_event_log)
-                else roby_digests = Hash.new
+                    reporter.info 'Copying the Roby event log'
+                    roby_digests = copy_roby_event_log(output_dir_path, roby_event_log)
+                else roby_digests = {}
                 end
 
-                if !silent
-                    puts "Copying #{text_files.size} text files"
-                end
+                reporter.info "Copying #{text_files.size} text files"
                 copy_text_files(output_dir_path, text_files)
 
-                if !silent
-                    puts "Copying #{ignored_entries.size} remaining files and folders"
-                end
+                reporter.info "Copying #{ignored_entries.size} remaining "\
+                              'files and folders'
                 copy_ignored_entries(output_dir_path, ignored_entries)
 
                 dataset = Dataset.new(output_dir_path, cache: cache_path)
                 digests = pocolog_digests.merge(roby_digests)
-                metadata = digests.inject(Array.new) do |a, (path, digest)|
+                metadata = digests.inject([]) do |a, (path, digest)|
                     a << Dataset::IdentityEntry.new(path, path.size, digest.hexdigest)
                 end
 
                 dataset.weak_validate_identity_metadata(metadata)
                 dataset.write_dataset_identity_to_metadata_file(metadata)
 
-                roby_info_yml_path = (dir_path + "info.yml")
+                roby_info_yml_path = (dir_path + 'info.yml')
                 if roby_info_yml_path.exist?
-                    begin roby_info = YAML.load(roby_info_yml_path.read)
+                    begin roby_info = YAML.safe_load(roby_info_yml_path.read)
                     rescue Psych::SyntaxError
                         warn "failed to load Roby metadata from #{roby_info_yml_path}"
                     end
-                    if roby_info && roby_info.respond_to?(:to_ary) && roby_info.first.respond_to?(:to_hash)
+
+                    roby_info_has_metadata =
+                        roby_info&.respond_to?(:to_ary) &&
+                        roby_info.first.respond_to?(:to_hash)
+                    if roby_info_has_metadata
                         import_roby_metadata(dataset, roby_info.first.to_hash)
                     end
                 end
@@ -167,26 +183,27 @@ module Syskit::Log
             # @return [Hash<Pathname,Digest::SHA256>] a hash of the log file's
             #   pathname to the file's SHA256 digest. The pathnames are
             #   relative to output_dir
-            def normalize_pocolog_files(output_dir, files, silent: false, cache_path: output_dir)
-                return Hash.new if files.empty?
+            def normalize_pocolog_files(output_dir, files,
+                                        reporter: CLI::NullReporter.new,
+                                        cache_path: output_dir)
+                return {} if files.empty?
 
-                out_pocolog_dir = (output_dir + "pocolog")
+                out_pocolog_dir = (output_dir + 'pocolog')
                 out_pocolog_dir.mkpath
-                out_pocolog_cache_dir = (cache_path + "pocolog")
+                out_pocolog_cache_dir = (cache_path + 'pocolog')
                 bytes_total = files.inject(0) { |s, p| s + p.size }
-                reporter =
-                    if silent
-                        Pocolog::CLI::NullReporter.new
-                    else
-                        Pocolog::CLI::TTYReporter.new(
-                            "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
-                    end
+                reporter.reset_progressbar(
+                    '|:bar| :current_byte/:total_byte :eta (:byte_rate/s)',
+                    total: bytes_total
+                )
 
                 Syskit::Log::Datastore.normalize(
-                    files, output_path: out_pocolog_dir, index_dir: out_pocolog_cache_dir, reporter: reporter,
-                    compute_sha256: true)
+                    files,
+                    output_path: out_pocolog_dir, index_dir: out_pocolog_cache_dir,
+                    reporter: reporter, compute_sha256: true
+                )
             ensure
-                reporter.finish if reporter
+                reporter&.finish
             end
 
             # @api private
@@ -197,11 +214,11 @@ module Syskit::Log
             # @param [Array<Pathname>] paths the input text file paths
             # @return [void]
             def copy_text_files(output_dir, files)
-                if !files.empty?
-                    out_text_dir    = (output_dir + "text")
-                    out_text_dir.mkpath
-                    FileUtils.cp files, out_text_dir
-                end
+                return if files.empty?
+
+                out_text_dir = (output_dir + 'text')
+                out_text_dir.mkpath
+                FileUtils.cp files, out_text_dir
             end
 
             # @api private
@@ -215,7 +232,7 @@ module Syskit::Log
             # @return [Hash<Pathname,Digest::SHA256>] a hash of the log file's
             #   pathname to the file's SHA256 digest
             def copy_roby_event_log(output_dir, event_log)
-                target_file = output_dir + "roby-events.log"
+                target_file = output_dir + 'roby-events.log'
                 FileUtils.cp event_log, target_file
                 digest = Digest::SHA256.new
                 digest.update(event_log.read)
@@ -233,11 +250,11 @@ module Syskit::Log
             #   recursively
             # @return [void]
             def copy_ignored_entries(output_dir, paths)
-                if !paths.empty?
-                    out_ignored_dir = (output_dir + 'ignored')
-                    out_ignored_dir.mkpath
-                    FileUtils.cp_r paths, out_ignored_dir
-                end
+                return if paths.empty?
+
+                out_ignored_dir = (output_dir + 'ignored')
+                out_ignored_dir.mkpath
+                FileUtils.cp_r paths, out_ignored_dir
             end
 
             # Import the metadata from Roby into the dataset's own metadata
@@ -249,4 +266,3 @@ module Syskit::Log
         end
     end
 end
-
