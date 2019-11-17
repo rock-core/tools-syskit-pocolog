@@ -156,10 +156,12 @@ module Syskit::Log
                     output_port 'out', double_t
                 end
 
-                deployment_m = Syskit::Log::Deployment.for_streams(streams, model: task_m, name: 'task')
-                plan.add_permanent_task(deployment = deployment_m.new(process_name: 'test', on: 'pocolog'))
-                deployment.start!
-                deployment.ready_event.emit
+                deployment_m = Syskit::Log::Deployment
+                               .for_streams(streams, model: task_m, name: 'task')
+                deployment = deployment_m.new(process_name: 'test', on: 'pocolog')
+                plan.add_permanent_task(deployment)
+                expect_execution { deployment.start! }
+                    .to { emit deployment.ready_event }
 
                 @subject = plan.execution_engine.pocolog_replay_manager
                 subject.reset_replay_base_times

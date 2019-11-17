@@ -80,6 +80,7 @@ module Syskit::Log
                         output_port 'unknown_port', '/double'
                     end
                     deployment_m = Syskit::Log::Deployment.for_streams(TaskStreams.new, name: 'test', model: task_m)
+                    flexmock(Syskit::Log, :strict).should_receive(:warn).with(/state/).once
                     flexmock(Syskit::Log, :strict).should_receive(:warn).with(/unknown_port/).once
                     deployment_m.add_streams_from(streams, allow_missing: true)
                 end

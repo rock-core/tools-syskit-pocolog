@@ -53,24 +53,31 @@ module Syskit::Log
             end
         end
 
-        describe "#add_stream" do
-            describe "sanitize metadata" do
-                it "removes an empty rock_task_model" do
+        describe '#add_stream' do
+            describe 'sanitize metadata' do
+                it 'removes an empty rock_task_model' do
                     create_logfile 'test.0.log' do
-                        create_logfile_stream '/stream0',
-                            metadata: Hash['rock_task_model' => '']
+                        create_logfile_stream(
+                            '/stream0',
+                            metadata: { 'rock_task_model' => '' }
+                        )
                     end
-                    flexmock(Syskit::Log).should_receive(:warn).
-                        with("removing empty metadata property 'rock_task_model' from /stream0").
-                        once
+                    flexmock(Syskit::Log)
+                        .should_receive(:warn)
+                        .with('removing empty metadata property "rock_task_model" '\
+                              'from /stream0')
+                        .once
                     stream = open_logfile_stream('test.0.log', '/stream0')
                     subject.add_stream(stream)
                     refute stream.metadata['rock_task_model']
                 end
-                it "removes the nameservice prefix" do
+
+                it 'removes the nameservice prefix' do
                     create_logfile 'test0.0.log' do
-                        create_logfile_stream '/stream0',
-                            metadata: Hash['rock_task_name' => 'localhost/task']
+                        create_logfile_stream(
+                            '/stream0',
+                            metadata: { 'rock_task_name' => 'localhost/task' }
+                        )
                     end
                     stream = open_logfile_stream('test0.0.log', '/stream0')
                     subject.add_stream(stream)

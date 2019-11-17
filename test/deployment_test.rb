@@ -33,7 +33,8 @@ module Syskit::Log
         end
 
         it "gets notified of new samples when running" do
-            subject.start!
+            expect_execution { subject.start! }
+                .to { emit subject.ready_event }
             flexmock(subject).should_receive(:process_sample).
                 with(port_stream, Time.at(0), 0).
                 once
@@ -41,7 +42,8 @@ module Syskit::Log
         end
 
         it "does nothing if the streams are eof?" do
-            subject.start!
+            expect_execution { subject.start! }
+                .to { emit subject.ready_event }
             replay_manager.step
             replay_manager.step
         end
@@ -49,7 +51,8 @@ module Syskit::Log
         describe "dynamic stream addition and removal" do
             attr_reader :other_deployment
             before do
-                subject.start!
+                expect_execution { subject.start! }
+                    .to { emit subject.ready_event }
                 replay_manager.step
 
                 other_task_m = Syskit::TaskContext.new_submodel do
@@ -63,7 +66,8 @@ module Syskit::Log
             it "does not skip a sample when eof? and a new stream is added to the alignment" do
                 replay_manager.step
 
-                other_deployment.start!
+                expect_execution { other_deployment.start! }
+                    .to { emit other_deployment.ready_event }
                 flexmock(other_deployment).should_receive(:process_sample).
                     with(streams.find_port_by_name('other_out'), Time.at(1), 1).
                     once
@@ -71,9 +75,10 @@ module Syskit::Log
             end
 
             it "does not skip a sample when the current sample is from a stream that has been removed" do
-                other_deployment.start!
-                subject.stop!
-                assert_event_emission subject.stop_event
+                expect_execution { other_deployment.start! }
+                    .to { emit other_deployment.ready_event }
+                expect_execution { subject.stop! }
+                    .to { emit subject.stop_event }
                 flexmock(other_deployment).should_receive(:process_sample).
                     with(streams.find_port_by_name('other_out'), Time.at(1), 1).
                     once
@@ -87,34 +92,32 @@ module Syskit::Log
         end
 
         it "does not get notified if stopped" do
-            subject.start!
-            subject.stop!
-            assert_event_emission(subject.stop_event)
+            expect_execution { subject.start! }.to { emit subject.ready_event }
+            expect_execution { subject.stop! }.to { emit subject.stop_event }
             flexmock(subject).should_receive(:process_sample).never
             replay_manager.step
         end
 
         it "forwards the samples to an existing, running, deployed task" do
-            plan.add_permanent_task(task = subject.task('task'))
+            plan.add(task = subject.task('task'))
             syskit_configure_and_start(task)
-            reader = task.orocos_task.out.reader
+            reader = Orocos.allow_blocking_calls { task.orocos_task.out.reader }
             subject.process_sample(port_stream, Time.now, 1)
-            sample = assert_has_one_new_sample reader
+            sample = expect_execution.to { have_one_new_sample reader }
             assert_equal 1, sample
         end
 
         it "does not forward the samples to a configured task" do
-            plan.add_permanent_task(task = subject.task('task'))
+            plan.add(task = subject.task('task'))
             syskit_configure(task)
             flexmock(task.orocos_task.out).should_receive(:write).never
             subject.process_sample(port_stream, Time.now, 1)
         end
         it "does not forward the samples to a finished task" do
-            plan.add_permanent_task(task = subject.task('task'))
+            plan.add(task = subject.task('task'))
             syskit_configure_and_start(task)
-            plan.unmark_permanent_task(task)
-            task.stop!
-            assert_event_emission(task.stop_event)
+            expect_execution { task.stop! }
+                .to { emit task.stop_event }
 
             flexmock(task.orocos_task.out).should_receive(:write).never
             subject.process_sample(port_stream, Time.now, 1)

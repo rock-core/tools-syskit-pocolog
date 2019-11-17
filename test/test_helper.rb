@@ -11,11 +11,13 @@ module Syskit::Log
         include Pocolog::TestHelpers
 
         def setup
-            super
-
             @pocolog_log_level = Pocolog.logger.level
             Pocolog.logger.level = Logger::WARN
-            app.register_app_extension('syskit-pocolog', Syskit::Log::Plugin)
+            unless Roby.app.loaded_plugin?('syskit-log')
+                Roby.app.add_plugin('syskit-log', Syskit::Log::Plugin)
+            end
+
+            super
         end
 
         def teardown

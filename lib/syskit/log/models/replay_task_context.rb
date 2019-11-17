@@ -26,23 +26,18 @@ module Syskit
                     end
                 end
 
-                def register_syskit_model_from_orogen_name(model)
-                    orogen_model = model.orogen_model
-                    namespace, basename = syskit_names_from_orogen_name(orogen_model.name)
-                    register_syskit_model(OroGen::Pocolog, namespace, basename, model)
-                end
-
                 # @api private
                 #
                 # Setup a newly created {ReplayTaskContext}. This is called
                 # internally by MetaRuby's #new_submodel
                 def setup_submodel(submodel, **options, &block)
-                    super
+                    super(submodel, **options, &block)
 
                     # We want to "copy" the services (dynamic and plain) from
                     # the plain model
                     plain_model = Syskit::TaskContext
                                   .find_model_by_orogen(submodel.orogen_model)
+
                     if plain_model
                         submodel.instance_variable_set :@plain_task_context, plain_model
                         submodel.copy_services_from_plain_model(plain_model)
@@ -51,6 +46,10 @@ module Syskit
                             :@plain_task_context, Syskit::TaskContext
                         )
                     end
+                end
+
+                def register_model
+                    self.name = OroGen::Pocolog.register_syskit_model(self)
                 end
 
                 # @api private

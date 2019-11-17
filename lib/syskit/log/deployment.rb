@@ -25,7 +25,6 @@ module Syskit::Log
 
         on :start do |_context|
             replay_manager.register(self)
-            ready_event.emit
         end
 
         on :stop do |_context|
