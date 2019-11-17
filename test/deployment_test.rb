@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe Deployment do
         attr_reader :replay_manager
         attr_reader :replay_manager, :streams, :port_stream, :task_m, :deployment_m
@@ -28,7 +28,7 @@ module Syskit::Pocolog
             end
             @replay_manager = execution_engine.pocolog_replay_manager
 
-            @deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: task_m, name: 'task')
+            @deployment_m = Syskit::Log::Deployment.for_streams(streams, model: task_m, name: 'task')
             plan.add_permanent_task(@subject = deployment_m.new(process_name: 'test', on: 'pocolog'))
         end
 
@@ -55,7 +55,7 @@ module Syskit::Pocolog
                 other_task_m = Syskit::TaskContext.new_submodel do
                     output_port 'other_out', '/double'
                 end
-                other_deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: other_task_m, name: 'task')
+                other_deployment_m = Syskit::Log::Deployment.for_streams(streams, model: other_task_m, name: 'task')
                 @other_deployment = other_deployment_m.new(process_name: 'other_test', on: 'pocolog')
                 plan.add_permanent_task(other_deployment)
             end
@@ -93,7 +93,7 @@ module Syskit::Pocolog
             flexmock(subject).should_receive(:process_sample).never
             replay_manager.step
         end
-        
+
         it "forwards the samples to an existing, running, deployed task" do
             plan.add_permanent_task(task = subject.task('task'))
             syskit_configure_and_start(task)
@@ -102,7 +102,7 @@ module Syskit::Pocolog
             sample = assert_has_one_new_sample reader
             assert_equal 1, sample
         end
-        
+
         it "does not forward the samples to a configured task" do
             plan.add_permanent_task(task = subject.task('task'))
             syskit_configure(task)

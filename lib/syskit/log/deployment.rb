@@ -1,0 +1,52 @@
+module Syskit::Log
+    # Task supporting the replay process
+    #
+    # To give some control over how the streams are aligned together (and
+    # potentially allow optimizing the replay process), streams supporting a
+    # given task are injected in the replay process when they are associated
+    # with a deployment task, and removed when the deployment is removed.
+    class Deployment < Syskit::Deployment
+        extend Models::Deployment
+
+        attr_reader :stream_to_port
+
+        def initialize(**options)
+            super
+            @stream_to_port = {}
+        end
+
+        def deployed_model_by_orogen_model(orogen_model)
+            ReplayTaskContext.model_for(orogen_model.task_model)
+        end
+
+        def replay_manager
+            execution_engine.pocolog_replay_manager
+        end
+
+        on :start do |_context|
+            replay_manager.register(self)
+            ready_event.emit
+        end
+
+        on :stop do |_context|
+            replay_manager.deregister(self)
+        end
+
+        def added_execution_agent_parent(executed_task, _info)
+            super
+            executed_task.start_event.on do
+                model.each_stream_mapping do |stream, model_port|
+                    orocos_port = model_port.bind(executed_task).to_orocos_port
+                    stream_to_port[stream] = orocos_port
+                end
+            end
+            executed_task.stop_event.on do
+                stream_to_port.clear
+            end
+        end
+
+        def process_sample(stream, _time, sample)
+            stream_to_port[stream]&.write(sample)
+        end
+    end
+end

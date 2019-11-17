@@ -1,8 +1,8 @@
 require 'test_helper'
-module Syskit::Pocolog
+module Syskit::Log
     module Models
         describe ReplayTaskContext do
-            subject { Syskit::Pocolog::ReplayTaskContext }
+            subject { Syskit::Log::ReplayTaskContext }
             describe "#model_for" do
                 attr_reader :task_m, :replay_task_m
                 before do

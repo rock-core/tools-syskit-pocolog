@@ -1,4 +1,4 @@
-# Syskit::Pocolog
+# Syskit::Log
 
 Integration of pocolog-based log replay in a Syskit application
 

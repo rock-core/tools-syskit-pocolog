@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe Streams do
         subject { Streams.new }
 
@@ -60,7 +60,7 @@ module Syskit::Pocolog
                         create_logfile_stream '/stream0',
                             metadata: Hash['rock_task_model' => '']
                     end
-                    flexmock(Syskit::Pocolog).should_receive(:warn).
+                    flexmock(Syskit::Log).should_receive(:warn).
                         with("removing empty metadata property 'rock_task_model' from /stream0").
                         once
                     stream = open_logfile_stream('test.0.log', '/stream0')
@@ -195,7 +195,7 @@ module Syskit::Pocolog
             # Helper method to test whether the method issues some warning
             # messages
             def should_warn(matcher)
-                flexmock(Syskit::Pocolog).should_receive(:warn).with(matcher).once
+                flexmock(Syskit::Log).should_receive(:warn).with(matcher).once
             end
 
             it "ignores streams without a task model" do

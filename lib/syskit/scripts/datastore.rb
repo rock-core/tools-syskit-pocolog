@@ -1,8 +1,8 @@
-require 'syskit/pocolog/cli/datastore'
+require 'syskit/log/cli/datastore'
 
 class CLI < Thor
     desc 'datastore', 'data management'
-    subcommand 'datastore', Syskit::Pocolog::CLI::Datastore
+    subcommand 'datastore', Syskit::Log::CLI::Datastore
 end
 
 Roby.display_exception do

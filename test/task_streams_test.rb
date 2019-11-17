@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe TaskStreams do
         attr_reader :subject
         before do

@@ -1,8 +1,7 @@
 require 'test_helper'
-require 'roby/test/droby_test_helpers'
-require 'syskit/pocolog/datastore/index_build'
+require 'syskit/log/datastore/index_build'
 
-module Syskit::Pocolog
+module Syskit::Log
     class Datastore
         describe IndexBuild do
             attr_reader :datastore, :dataset, :index_build
@@ -79,7 +78,6 @@ module Syskit::Pocolog
             end
 
             describe "#rebuild_roby_index" do
-                include Roby::Test::DRobyTestHelpers
                 before do
                     droby_create_event_log(dataset_path + 'roby-events.log') do
                         droby_write_event :test, 10

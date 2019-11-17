@@ -1,7 +1,7 @@
 require 'test_helper'
-require 'syskit/pocolog/cli/datastore'
+require 'syskit/log/cli/datastore'
 
-module Syskit::Pocolog
+module Syskit::Log
     module CLI
         describe Datastore do
             attr_reader :root_path, :datastore_path, :datastore
@@ -13,7 +13,7 @@ module Syskit::Pocolog
             end
 
             def datastore_m
-                Syskit::Pocolog::Datastore
+                Syskit::Log::Datastore
             end
 
             after do
@@ -196,7 +196,7 @@ module Syskit::Pocolog
                 it "normalizes the logfiles in the input directory into the directory provided as 'out'" do
                     create_logfile('test.0.log') {}
                     out_path = root_path + "normalized"
-                    flexmock(Syskit::Pocolog::Datastore).should_receive(:normalize).
+                    flexmock(Syskit::Log::Datastore).should_receive(:normalize).
                         with([logfile_pathname('test.0.log')], hsh(output_path: out_path)).
                         once.pass_thru
                     call_cli('normalize', logfile_pathname.to_s, "--out=#{out_path}", silent: true)
@@ -204,7 +204,7 @@ module Syskit::Pocolog
                 it "reports progress without --silent" do
                     create_logfile('test.0.log') {}
                     out_path = root_path + "normalized"
-                    flexmock(Syskit::Pocolog::Datastore).should_receive(:normalize).
+                    flexmock(Syskit::Log::Datastore).should_receive(:normalize).
                         with([logfile_pathname('test.0.log')], hsh(output_path: out_path)).
                         once.pass_thru
                     capture_io do
@@ -232,18 +232,18 @@ module Syskit::Pocolog
                 end
 
                 it "runs the indexer on all datasets of the store if none are provided on the command line" do
-                    flexmock(Syskit::Pocolog::Datastore).
+                    flexmock(Syskit::Log::Datastore).
                         should_receive(:index_build).
                         with(expected_store, expected_dataset('a'), Hash).once.
                         pass_thru
-                    flexmock(Syskit::Pocolog::Datastore).
+                    flexmock(Syskit::Log::Datastore).
                         should_receive(:index_build).
                         with(expected_store, expected_dataset('b'), Hash).once.
                         pass_thru
                     call_cli('index', datastore_path.to_s)
                 end
                 it "runs the indexer on the datasets of the store specified on the command line" do
-                    flexmock(Syskit::Pocolog::Datastore).
+                    flexmock(Syskit::Log::Datastore).
                         should_receive(:index_build).
                         with(expected_store, expected_dataset('a'), Hash).once.
                         pass_thru
@@ -292,7 +292,7 @@ a0fa <no description>
                 end
 
                 it "raises if the query is invalid" do
-                    assert_raises(Syskit::Pocolog::Datastore::Dataset::InvalidDigest) do
+                    assert_raises(Syskit::Log::Datastore::Dataset::InvalidDigest) do
                         call_cli('list', datastore_path.to_s, 'not_a_sha', silent: false)
                     end
                 end
@@ -377,7 +377,7 @@ a0fa <no description>
                 end
 
                 it "raises if the query is invalid" do
-                    assert_raises(Syskit::Pocolog::Datastore::Dataset::InvalidDigest) do
+                    assert_raises(Syskit::Log::Datastore::Dataset::InvalidDigest) do
                         call_cli('metadata', datastore_path.to_s, 'not_a_sha', '--get', silent: false)
                     end
                 end
@@ -418,7 +418,7 @@ a0fa <no description>
                         assert_equal "a0ea test=a,b\na0fa test=b\n", out
                     end
                     it "displays the short digest by default" do
-                        flexmock(Syskit::Pocolog::Datastore).new_instances.should_receive(:short_digest).
+                        flexmock(Syskit::Log::Datastore).new_instances.should_receive(:short_digest).
                             and_return { |dataset| dataset.digest[0, 3] }
                         out, _err = capture_io do
                             call_cli('metadata', datastore_path.to_s, '--get', silent: false)

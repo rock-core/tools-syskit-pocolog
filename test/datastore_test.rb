@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe Datastore do
         attr_reader :root_path, :datastore_path, :datastore
 

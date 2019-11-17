@@ -1,9 +1,9 @@
 require 'test_helper'
-require 'syskit/pocolog/datastore/import'
+require 'syskit/log/datastore/import'
 require 'tmpdir'
 require 'timecop'
 
-module Syskit::Pocolog
+module Syskit::Log
     class Datastore
         describe Import do
             attr_reader :root_path, :datastore_path, :import, :datastore
@@ -65,7 +65,7 @@ module Syskit::Pocolog
             describe "#import" do
                 before do
                     create_logfile 'test.0.log' do
-                        create_logfile_stream 'test', 
+                        create_logfile_stream 'test',
                             metadata: Hash['rock_task_name' => 'task0', 'rock_task_object_name' => 'port']
                     end
                     FileUtils.touch logfile_pathname('test.txt')
@@ -120,7 +120,7 @@ module Syskit::Pocolog
                         output_path: datastore_path + 'incoming' + '0' + 'core' + 'pocolog',
                         index_dir: datastore_path + "incoming" + "0" + "cache" + "pocolog")
 
-                    flexmock(Syskit::Pocolog::Datastore).should_receive(:normalize).
+                    flexmock(Syskit::Log::Datastore).should_receive(:normalize).
                         with([logfile_pathname('test.0.log')], expected_normalize_args).once.
                         pass_thru
                     import_dir = import.import(logfile_pathname, silent: true)
@@ -159,7 +159,7 @@ module Syskit::Pocolog
                     logfile_pathname("info.yml").open('w') do |io|
                         io.write "%invalid_yaml"
                     end
-                    
+
                     import_dir = nil
                     _out, err = capture_io do
                         import_dir = import.import(logfile_pathname, silent: true)

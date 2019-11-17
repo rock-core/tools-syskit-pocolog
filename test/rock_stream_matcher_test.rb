@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe RockStreamMatcher do
         attr_reader :streams
         before do

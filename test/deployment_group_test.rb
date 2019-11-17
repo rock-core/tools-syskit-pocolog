@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe Extensions::Configuration do
         attr_reader :group, :streams, :double_t
         before do
@@ -47,7 +47,7 @@ module Syskit::Pocolog
             it "registers the stream-to-port mappings for the matching ports on the deployment model" do
                 task_m = Syskit::TaskContext.new_submodel
                 deployment_m = Deployment.new_submodel
-                flexmock(Syskit::Pocolog::Deployment).
+                flexmock(Syskit::Log::Deployment).
                     should_receive(:for_streams).
                     with(streams, ->(h) { h[:model] == task_m && h[:name] == 'test' }).
                     and_return(mock = flexmock(deployment_m))

@@ -1,6 +1,6 @@
 require 'test_helper'
 
-module Syskit::Pocolog
+module Syskit::Log
     describe ReplayManager do
         attr_reader :subject, :streams, :port_stream, :task_m, :deployment_m
         before do
@@ -21,11 +21,11 @@ module Syskit::Pocolog
             @task_m = Syskit::TaskContext.new_submodel do
                 output_port 'out', double_t
             end
-            
+
             plan = Roby::ExecutablePlan.new
             @subject = ReplayManager.new(plan.execution_engine)
 
-            @deployment_m = Syskit::Pocolog::Deployment
+            @deployment_m = Syskit::Log::Deployment
                             .for_streams(streams, model: task_m, name: 'task')
         end
 
@@ -156,7 +156,7 @@ module Syskit::Pocolog
                     output_port 'out', double_t
                 end
 
-                deployment_m = Syskit::Pocolog::Deployment.for_streams(streams, model: task_m, name: 'task')
+                deployment_m = Syskit::Log::Deployment.for_streams(streams, model: task_m, name: 'task')
                 plan.add_permanent_task(deployment = deployment_m.new(process_name: 'test', on: 'pocolog'))
                 deployment.start!
                 deployment.ready_event.emit

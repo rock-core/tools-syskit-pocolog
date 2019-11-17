@@ -1,23 +1,25 @@
-$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'syskit/test/self'
-require 'syskit/pocolog'
+require 'syskit/log'
+require 'pocolog'
 require 'pocolog/test_helpers'
 require 'minitest/autorun'
-require 'syskit/pocolog/datastore/index_build'
+require 'syskit/log/datastore/index_build'
 
-module Syskit::Pocolog
+module Syskit::Log
     module Test
         include Pocolog::TestHelpers
 
         def setup
-            @pocolog_log_level = ::Pocolog.logger.level
-            ::Pocolog.logger.level = Logger::WARN
-            app.register_app_extension('syskit-pocolog', Syskit::Pocolog::Plugin)
             super
+
+            @pocolog_log_level = Pocolog.logger.level
+            Pocolog.logger.level = Logger::WARN
+            app.register_app_extension('syskit-pocolog', Syskit::Log::Plugin)
         end
 
         def teardown
-            ::Pocolog.logger.level = @pocolog_log_level if @pocolog_log_level
+            Pocolog.logger.level = @pocolog_log_level if @pocolog_log_level
             super
         end
 
@@ -72,4 +74,4 @@ module Syskit::Pocolog
         end
     end
 end
-Minitest::Test.include Syskit::Pocolog::Test
+Minitest::Test.include Syskit::Log::Test
