@@ -45,7 +45,7 @@ module Syskit::Log
             #
             # @param [Pathname] dir_path the input directory
             # @return [Pathname] the directory of the imported dataset in the store
-            def import(dir_path, force: false, reporter: CLI::NullReporter.new)
+            def import(dir_path, force: false, reporter: Pocolog::CLI::NullReporter.new)
                 datastore.in_incoming do |core_path, cache_path|
                     dataset = normalize_dataset(
                         dir_path, core_path, cache_path: cache_path, reporter: reporter
@@ -80,7 +80,8 @@ module Syskit::Log
             # @raise DatasetAlreadyExists if a dataset already exists with the same
             #   ID than the new one and 'force' is false
             def move_dataset_to_store(dir_path, dataset,
-                                      force: false, reporter: TTY::NullReporter.new)
+                                      force: false,
+                                      reporter: Pocolog::CLI::NullReporter.new)
                 dataset_digest = dataset.compute_dataset_digest
 
                 if datastore.has?(dataset_digest)

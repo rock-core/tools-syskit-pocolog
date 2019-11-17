@@ -15,13 +15,29 @@ module Syskit::Log
         class Datastore < Thor
             namespace 'datastore'
 
+            class_option :silent, type: :boolean, default: false
+            class_option :colors, type: :boolean, default: TTY::Color.color?
+            class_option :progress, type: :boolean, default: TTY::Color.color?
+
             no_commands do
-                def create_reporter(format = "", silent: false, **options)
+                def create_reporter(
+                    format = '',
+                    progress: options[:progress],
+                    colors: options[:colors],
+                    silent: options[:silent],
+                    **options
+                )
                     if silent
                         Pocolog::CLI::NullReporter.new
                     else
-                        Pocolog::CLI::TTYReporter.new(format, **options)
+                        Pocolog::CLI::TTYReporter.new(
+                            format, progress: progress, colors: colors, **options
+                        )
                     end
+                end
+
+                def create_pastel
+                    Pastel.new(enabled: options[:colors])
                 end
 
                 def open_store(path)
@@ -97,11 +113,11 @@ module Syskit::Log
                         properties = task.each_property_stream.to_a
                         puts "    #{task.task_name}[#{task.orogen_model_name}]: #{ports.size} ports and #{properties.size} properties"
                         name_field_size = (ports.map { |name, _| name.size } + properties.map { |name, _| name.size }).max
-                        if !ports.empty?
+                        unless ports.empty?
                             puts "    Ports:"
                             show_task_objects(ports, name_field_size)
                         end
-                        if !properties.empty?
+                        unless properties.empty?
                             puts "    Properties:"
                             show_task_objects(properties, name_field_size)
                         end
@@ -145,8 +161,6 @@ module Syskit::Log
                 default: 'normalized'
             method_option :override, desc: 'whether existing files in the output directory should be overriden',
                 type: :boolean, default: false
-            method_option :silent, desc: 'do not display progress',
-                type: :boolean, default: false
 
             def normalize(path)
                 path = Pathname.new(path).realpath
@@ -154,16 +168,14 @@ module Syskit::Log
                 output_path.mkpath
 
                 paths = Syskit::Log.logfiles_in_dir(path)
-                if options[:silent]
-                    reporter = Pocolog::CLI::NullReporter.new
-                else
-                    bytes_total = paths.inject(0) do |total, path|
-                        total + path.size
-                    end
-                    reporter =
-                        Pocolog::CLI::TTYReporter.new(
-                            "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)", total: bytes_total)
+                bytes_total = paths.inject(0) do |total, path|
+                    total + path.size
                 end
+                reporter = create_reporter(
+                    '|:bar| :current_byte/:total_byte :eta (:byte_rate/s)',
+                    total: bytes_total
+                )
+
                 begin
                     Syskit::Log::Datastore.normalize(paths, output_path: output_path, reporter: reporter)
                 ensure reporter.finish
@@ -172,8 +184,6 @@ module Syskit::Log
 
             desc 'import DATASTORE_PATH PATH', 'normalize and import a raw dataset into a syskit-pocolog datastore'
             method_option :auto, desc: 'import all datasets under PATH',
-                type: :boolean, default: false
-            method_option :silent, desc: 'do not display progress',
                 type: :boolean, default: false
             method_option :force, desc: 'overwrite existing datasets',
                 type: :boolean, default: false
@@ -196,7 +206,7 @@ module Syskit::Log
                     paths = [root_path]
                 end
 
-                reporter = create_reporter(silent: options[:silent])
+                reporter = create_reporter
 
                 datastore_path = Pathname.new(datastore_path)
                 datastore = Syskit::Log::Datastore.create(datastore_path)
@@ -212,7 +222,9 @@ module Syskit::Log
 
                     datastore.in_incoming do |core_path, cache_path|
                         importer = Syskit::Log::Datastore::Import.new(datastore)
-                        dataset = importer.normalize_dataset(p, core_path, cache_path: cache_path, silent: options[:silent])
+                        dataset = importer.normalize_dataset(
+                            p, core_path, cache_path: cache_path,
+                                          reporter: reporter)
                         stream_duration = dataset.each_pocolog_stream.map do |stream|
                             stream.duration_lg
                         end.max
@@ -227,7 +239,7 @@ module Syskit::Log
 
                         if stream_duration >= options[:min_duration]
                             begin
-                                importer.move_dataset_to_store(p, dataset, force: options[:force], silent: options[:silent])
+                                importer.move_dataset_to_store(p, dataset, force: options[:force], reporter: reporter)
                             rescue Syskit::Log::Datastore::Import::DatasetAlreadyExists
                                 reporter.info "#{p} already seem to have been imported as #{dataset.compute_dataset_digest}. Give --force to import again"
                             end
@@ -241,21 +253,15 @@ module Syskit::Log
             desc 'index DATASTORE_PATH [DATASETS]', 'refreshes or rebuilds (with --force) the datastore indexes'
             method_option :force, desc: 'force rebuilding even indexes that look up-to-date',
                 type: :boolean, default: false
-            method_option :silent, desc: 'suppress output',
-                type: :boolean, default: false
             def index(datastore_path, *datasets)
                 store = open_store(datastore_path)
                 datasets = resolve_datasets(store, *datasets)
-                reporter =
-                    if options[:silent]
-                        Pocolog::CLI::NullReporter.new
-                    else
-                        Pocolog::CLI::TTYReporter.new("")
-                    end
-                pastel = Pastel.new
+                reporter = create_reporter
                 datasets.each do |d|
                     reporter.title "Processing #{d.compute_dataset_digest}"
-                    Syskit::Log::Datastore.index_build(store, d, force: options[:force], reporter: reporter)
+                    Syskit::Log::Datastore.index_build(
+                        store, d, force: options[:force], reporter: reporter
+                    )
                 end
             end
 
@@ -274,7 +280,7 @@ module Syskit::Log
                 store = open_store(datastore_path)
                 datasets = resolve_datasets(store, *query)
 
-                pastel = Pastel.new
+                pastel = create_pastel
                 datasets.each do |dataset|
                     if options[:digest]
                         if options[:long_digests]

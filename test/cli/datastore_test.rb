@@ -33,29 +33,44 @@ module Syskit::Log
 
             # Helper method to call a CLI subcommand
             def call_cli(*args, silent: true)
-                extra_args = Array.new
-                if silent
-                    extra_args << '--silent'
-                end
+                extra_args = []
+                extra_args << '--colors=f' << '--progress=f'
+                extra_args << '--silent' if silent
                 Datastore.start([*args, *extra_args], debug: true)
             end
 
-            describe "#import" do
-                it "imports a single dataset into the store" do
+            describe '#import' do
+                it 'imports a single dataset into the store' do
                     incoming_path = datastore_path + 'incoming' + '0'
-                    flexmock(datastore_m::Import).new_instances.should_receive(:normalize_dataset).
-                        with(logfile_pathname, incoming_path + "core", cache_path: incoming_path + "cache", silent: true).
-                        once.pass_thru
+                    flexmock(datastore_m::Import)
+                        .new_instances.should_receive(:normalize_dataset)
+                        .with(
+                            logfile_pathname, incoming_path + 'core',
+                            on do |h|
+                                h[:cache_path] == incoming_path + 'cache' &&
+                                h[:reporter].kind_of?(Pocolog::CLI::NullReporter)
+                            end
+                        )
+                        .once.pass_thru
                     expected_dataset = lambda do |s|
-                        assert_equal incoming_path + "core", s.dataset_path
-                        assert_equal incoming_path + "cache", s.cache_path
+                        assert_equal incoming_path + 'core', s.dataset_path
+                        assert_equal incoming_path + 'cache', s.cache_path
                         true
                     end
-                    flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
-                        with(logfile_pathname, expected_dataset, force: false, silent: true).
-                        once.pass_thru
+                    flexmock(datastore_m::Import)
+                        .new_instances.should_receive(:move_dataset_to_store)
+                        .with(
+                            logfile_pathname, expected_dataset,
+                            on do |h|
+                                h[:force] == false &&
+                                h[:reporter].kind_of?(Pocolog::CLI::NullReporter)
+                            end
+                        )
+                        .once.pass_thru
 
-                    call_cli('import', '--min-duration=0', datastore_path.to_s, logfile_pathname.to_s, silent: true)
+                    call_cli('import', '--min-duration=0',
+                             datastore_path.to_s, logfile_pathname.to_s,
+                             silent: true)
                 end
 
                 describe '--auto' do
@@ -68,24 +83,38 @@ module Syskit::Log
                         create_logfile('test.0.log') {}
                         FileUtils.touch logfile_path('test-events.log')
                         incoming_path = datastore_path + 'incoming' + '0'
-                        flexmock(datastore_m::Import).new_instances.should_receive(:normalize_dataset).
-                            with(logfile_pathname, incoming_path + "core", cache_path: incoming_path + "cache", silent: true).
-                            once.pass_thru
+                        flexmock(datastore_m::Import)
+                            .new_instances.should_receive(:normalize_dataset)
+                            .with(
+                                logfile_pathname, incoming_path + 'core',
+                                on do |h|
+                                    h[:cache_path] == incoming_path + 'cache' &&
+                                    h[:reporter].kind_of?(Pocolog::CLI::NullReporter)
+                                end
+                            )
+                            .once.pass_thru
                         expected_dataset = lambda do |s|
                             assert_equal incoming_path + "core", s.dataset_path
                             assert_equal incoming_path + "cache", s.cache_path
                             true
                         end
 
-                        flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
-                            with(logfile_pathname, expected_dataset, force: false, silent: true).
-                            once.pass_thru
+                        flexmock(datastore_m::Import)
+                            .new_instances.should_receive(:move_dataset_to_store).
+                            with(
+                                logfile_pathname, expected_dataset,
+                                on do |h|
+                                    h[:force] == false &&
+                                    h[:reporter].kind_of?(Pocolog::CLI::NullReporter)
+                                end
+                            )
+                            .once.pass_thru
 
                         call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
-                        digest, time = datastore_m::Import.find_import_info(logfile_pathname)
+                        digest, = datastore_m::Import.find_import_info(logfile_pathname)
                         assert datastore.has?(digest)
                     end
-                    it "ignores datasets that have already been imported" do
+                    it 'ignores datasets that have already been imported' do
                         create_logfile('test.0.log') do
                             create_logfile_stream 'test', metadata: Hash['rock_task_name' => 'task', 'rock_task_object_name' => 'port']
                             write_logfile_sample Time.now, Time.now, 10
@@ -97,11 +126,11 @@ module Syskit::Log
                             never
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             never
-                        _out, err = capture_io do
+                        out, = capture_io do
                             call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /#{logfile_pathname} already seem to have been imported as .*Give --force/,
-                            err
+                            out
                     end
                     it "processes datasets that have already been imported if --force is given" do
                         create_logfile('test.0.log') do
@@ -115,11 +144,11 @@ module Syskit::Log
                             once.pass_thru
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             once.pass_thru
-                        _out, err = capture_io do
+                        out, = capture_io do
                             call_cli('import', '--auto', '--min-duration=0', '--force', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /#{logfile_pathname} seem to have already been imported but --force is given, overwriting/,
-                            err
+                            out
                     end
                     it "ignores datasets that do not seem to be already imported, but are" do
                         create_logfile('test.0.log') do
@@ -134,11 +163,11 @@ module Syskit::Log
                             once.pass_thru
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             once.pass_thru
-                        _out, err = capture_io do
+                        out, = capture_io do
                             call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /#{logfile_pathname} already seem to have been imported as .*Give --force/,
-                            err
+                            out
                     end
                     it "imports datasets that do not seem to be already imported, but are if --force is given" do
                         create_logfile('test.0.log') do
@@ -156,10 +185,10 @@ module Syskit::Log
                             once.pass_thru
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             once.pass_thru
-                        _out, err = capture_io do
+                        out, = capture_io do
                             call_cli('import', '--auto', '--force', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
                         end
-                        assert_match /Replacing existing dataset #{digest} with new one/, err
+                        assert_match /Replacing existing dataset #{digest} with new one/, out
                         refute marker_path.exist?
                     end
                     it "ignores an empty dataset if --min-duration is non-zero" do
@@ -175,21 +204,28 @@ module Syskit::Log
                     end
                     it "ignores datasets whose logical duration is lower than --min-duration" do
                         create_logfile('test.0.log') do
-                            create_logfile_stream 'test', metadata: Hash['rock_task_name' => 'task', 'rock_task_object_name' => 'port']
+                            create_logfile_stream(
+                                'test', metadata: { 'rock_task_name' => 'task',
+                                                    'rock_task_object_name' => 'port' }
+                            )
                             write_logfile_sample Time.now, Time.now, 10
                             write_logfile_sample Time.now + 10, Time.now + 1, 20
                         end
                         FileUtils.touch logfile_path('test-events.log')
                         incoming_path = datastore_path + 'incoming' + '0'
-                        flexmock(datastore_m::Import).new_instances.should_receive(:normalize_dataset).
-                            once.pass_thru
-                        flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
-                            never
+                        flexmock(datastore_m::Import)
+                            .new_instances.should_receive(:normalize_dataset)
+                            .once.pass_thru
+                        flexmock(datastore_m::Import)
+                            .new_instances.should_receive(:move_dataset_to_store)
+                            .never
 
-                        _out, err = capture_io do
-                            call_cli('import', '--auto', '--min-duration=5', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                        out, = capture_io do
+                            call_cli('import', '--auto', '--min-duration=5',
+                                     datastore_path.to_s, logfile_pathname.dirname.to_s,
+                                     silent: false)
                         end
-                        assert_match /#{logfile_pathname} lasts only 1.0s, ignored/, err
+                        assert_match /#{logfile_pathname} lasts only 1.0s, ignored/, out
                     end
                 end
             end
