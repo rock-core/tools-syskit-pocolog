@@ -73,6 +73,25 @@ module Syskit::Log
                              silent: true)
                 end
 
+                it 'optionally sets tags, description and arbitraty metadata' do
+                    call_cli('import', '--min-duration=0',
+                             datastore_path.to_s, logfile_pathname.to_s,
+                             'some description', '--tags', 'test', 'tags',
+                             '--metadata', 'key0=value0a', 'key0=value0b', 'key1=value1',
+                             silent: true)
+
+                    dataset = Syskit::Log::Datastore.new(datastore_path)
+                                                    .each_dataset.first
+                    assert_equal ['some description'],
+                                 dataset.metadata_fetch_all('description').to_a
+                    assert_equal %w[test tags],
+                                 dataset.metadata_fetch_all('tags').to_a
+                    assert_equal %w[value0a value0b],
+                                 dataset.metadata_fetch_all('key0').to_a
+                    assert_equal %w[value1],
+                                 dataset.metadata_fetch_all('key1').to_a
+                end
+
                 describe '--auto' do
                     it "creates the datastore path" do
                         datastore_path.rmtree

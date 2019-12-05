@@ -196,7 +196,8 @@ module Syskit::Log
                 end
             end
 
-            desc 'import DATASTORE_PATH PATH', 'normalize and import a raw dataset into a syskit-pocolog datastore'
+            desc 'import DATASTORE_PATH PATH [DESCRIPTION]',
+                 'normalize and import a raw dataset into a syskit-pocolog datastore'
             method_option :auto, desc: 'import all datasets under PATH',
                                  type: :boolean, default: false
             method_option :force, desc: 'overwrite existing datasets',
@@ -204,6 +205,10 @@ module Syskit::Log
             method_option :min_duration, desc: 'skip datasets whose duration is lower '\
                                                'than this (in seconds)',
                                          type: :numeric, default: 60
+            method_option :tags, desc: 'tags to be added to the dataset',
+                                 type: :array, default: []
+            method_option :metadata, desc: 'metadata values as key=value pairs',
+                                     type: :array, default: []
             def import(datastore_path, root_path)
                 root_path = Pathname.new(root_path).realpath
                 if options[:auto]
@@ -226,6 +231,20 @@ module Syskit::Log
 
                 datastore_path = Pathname.new(datastore_path)
                 datastore = Syskit::Log::Datastore.create(datastore_path)
+
+                metadata = {}
+                metadata['description'] = description if description
+                metadata['tags'] = options[:tags]
+                options[:metadata].each do |pair|
+                    k, v = pair.split('=')
+                    unless v
+                        raise ArgumentError,
+                              'expected key=value pair as argument to '\
+                              "--metadata but got '#{pair}'"
+                    end
+                    (metadata[k] ||= []) << v
+                end
+
                 paths.each do |p|
                     reporter.title "Processing #{p}"
 
@@ -246,7 +265,10 @@ module Syskit::Log
                         importer = Syskit::Log::Datastore::Import.new(datastore)
                         dataset = importer.normalize_dataset(
                             p, core_path, cache_path: cache_path,
-                                          reporter: reporter)
+                                          reporter: reporter
+                        )
+                        metadata.each { |k, v| dataset.metadata_set(k, *v) }
+                        dataset.metadata_write_to_file
                         stream_duration = dataset.each_pocolog_stream
                                                  .map(&:duration_lg)
                                                  .max
