@@ -343,7 +343,7 @@ module Syskit::Log
             method_option :roby, desc: 'show detailed information about the Roby log in the dataset(s)',
                 type: :boolean, default: false
             method_option :all, desc: 'show all available information (implies --pocolog and --roby)',
-                type: :boolean, default: false
+                aliases: 'a', type: :boolean, default: false
             def list(*query)
                 store = open_store
                 datasets = resolve_datasets(store, *query)
