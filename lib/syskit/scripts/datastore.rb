@@ -3,6 +3,9 @@ require 'syskit/log/cli/datastore'
 class CLI < Thor
     desc 'datastore', 'data management'
     subcommand 'datastore', Syskit::Log::CLI::Datastore
+
+    desc 'ds', 'data management'
+    subcommand 'ds', Syskit::Log::CLI::Datastore
 end
 
 Roby.display_exception do
