@@ -18,6 +18,7 @@ module Syskit::Log
             class_option :silent, type: :boolean, default: false
             class_option :colors, type: :boolean, default: TTY::Color.color?
             class_option :progress, type: :boolean, default: TTY::Color.color?
+            class_option :store, type: :string
 
             no_commands do
                 def create_reporter(
@@ -40,9 +41,22 @@ module Syskit::Log
                     Pastel.new(enabled: options[:colors])
                 end
 
-                def open_store(path)
-                    path = Pathname.new(path).realpath
-                    Syskit::Log::Datastore.new(path)
+                def datastore_path
+                    unless (path = options[:store] || ENV['SYSKIT_LOG_STORE'])
+                        raise ArgumentError,
+                              'you must provide a path to a datastore either '\
+                              'with the --store option or through the '\
+                              'SYSKIT_LOG_STORE environment variable'
+                    end
+                    Pathname.new(path)
+                end
+
+                def open_store
+                    Syskit::Log::Datastore.new(datastore_path.realpath)
+                end
+
+                def create_store
+                    Syskit::Log::Datastore.create(datastore_path)
                 end
 
                 def show_dataset(pastel, store, dataset, long_digest: false)
@@ -209,7 +223,7 @@ module Syskit::Log
                                  type: :array, default: []
             method_option :metadata, desc: 'metadata values as key=value pairs',
                                      type: :array, default: []
-            def import(datastore_path, root_path)
+            def import(root_path, description = nil)
                 root_path = Pathname.new(root_path).realpath
                 if options[:auto]
                     paths = []
@@ -228,9 +242,7 @@ module Syskit::Log
                 end
 
                 reporter = create_reporter
-
-                datastore_path = Pathname.new(datastore_path)
-                datastore = Syskit::Log::Datastore.create(datastore_path)
+                datastore = create_store
 
                 metadata = {}
                 metadata['description'] = description if description
@@ -306,11 +318,11 @@ module Syskit::Log
                 end
             end
 
-            desc 'index DATASTORE_PATH [DATASETS]', 'refreshes or rebuilds (with --force) the datastore indexes'
+            desc 'index [DATASETS]', 'refreshes or rebuilds (with --force) the datastore indexes'
             method_option :force, desc: 'force rebuilding even indexes that look up-to-date',
                 type: :boolean, default: false
-            def index(datastore_path, *datasets)
-                store = open_store(datastore_path)
+            def index(*datasets)
+                store = open_store
                 datasets = resolve_datasets(store, *datasets)
                 reporter = create_reporter
                 datasets.each do |d|
@@ -332,8 +344,8 @@ module Syskit::Log
                 type: :boolean, default: false
             method_option :all, desc: 'show all available information (implies --pocolog and --roby)',
                 type: :boolean, default: false
-            def list(datastore_path, *query)
-                store = open_store(datastore_path)
+            def list(*query)
+                store = open_store
                 datasets = resolve_datasets(store, *query)
 
                 pastel = create_pastel
@@ -364,14 +376,14 @@ module Syskit::Log
                 type: :array, lazy_default: []
             method_option :long_digest, desc: 'display digests in full form, instead of shortening them',
                 type: :boolean, default: false
-            def metadata(datastore_path, *query)
+            def metadata(*query)
                 if !options[:get] && !options[:set]
                     raise ArgumentError, "provide either --get or --set"
                 elsif options[:get] && options[:set]
                     raise ArgumentError, "cannot provide both --get and --set at the same time"
                 end
 
-                store = open_store(datastore_path)
+                store = open_store
                 datasets = resolve_datasets(store, *query)
 
                 digest_to_s =

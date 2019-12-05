@@ -69,13 +69,13 @@ module Syskit::Log
                         .once.pass_thru
 
                     call_cli('import', '--min-duration=0',
-                             datastore_path.to_s, logfile_pathname.to_s,
+                             '--store', datastore_path.to_s, logfile_pathname.to_s,
                              silent: true)
                 end
 
                 it 'optionally sets tags, description and arbitraty metadata' do
                     call_cli('import', '--min-duration=0',
-                             datastore_path.to_s, logfile_pathname.to_s,
+                             '--store', datastore_path.to_s, logfile_pathname.to_s,
                              'some description', '--tags', 'test', 'tags',
                              '--metadata', 'key0=value0a', 'key0=value0b', 'key1=value1',
                              silent: true)
@@ -95,7 +95,8 @@ module Syskit::Log
                 describe '--auto' do
                     it "creates the datastore path" do
                         datastore_path.rmtree
-                        call_cli('import', '--auto', datastore_path.to_s, root_path.to_s)
+                        call_cli('import', '--auto', '--store', datastore_path.to_s,
+                                 root_path.to_s)
                         assert datastore_path.exist?
                     end
                     it "auto-imports any directory that looks like a raw dataset" do
@@ -129,7 +130,9 @@ module Syskit::Log
                             )
                             .once.pass_thru
 
-                        call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                        call_cli('import', '--auto', '--min-duration=0',
+                                 '--store', datastore_path.to_s,
+                                 logfile_pathname.dirname.to_s, silent: true)
                         digest, = datastore_m::Import.find_import_info(logfile_pathname)
                         assert datastore.has?(digest)
                     end
@@ -140,13 +143,17 @@ module Syskit::Log
                             write_logfile_sample Time.now + 10, Time.now + 1, 20
                         end
                         FileUtils.touch logfile_path('test-events.log')
-                        call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                        call_cli('import', '--auto', '--min-duration=0',
+                                 '--store', datastore_path.to_s,
+                                 logfile_pathname.dirname.to_s, silent: true)
                         flexmock(datastore_m::Import).new_instances.should_receive(:normalize_dataset).
                             never
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             never
                         out, = capture_io do
-                            call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                            call_cli('import', '--auto', '--min-duration=0',
+                                     '--store', datastore_path.to_s,
+                                     logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /#{logfile_pathname} already seem to have been imported as .*Give --force/,
                             out
@@ -158,13 +165,17 @@ module Syskit::Log
                             write_logfile_sample Time.now + 10, Time.now + 1, 20
                         end
                         FileUtils.touch logfile_path('test-events.log')
-                        call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                        call_cli('import', '--auto', '--min-duration=0',
+                                 '--store', datastore_path.to_s,
+                                 logfile_pathname.dirname.to_s, silent: true)
                         flexmock(datastore_m::Import).new_instances.should_receive(:normalize_dataset).
                             once.pass_thru
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             once.pass_thru
                         out, = capture_io do
-                            call_cli('import', '--auto', '--min-duration=0', '--force', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                            call_cli('import', '--auto', '--min-duration=0', '--force',
+                                     '--store', datastore_path.to_s,
+                                     logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /#{logfile_pathname} seem to have already been imported but --force is given, overwriting/,
                             out
@@ -176,14 +187,18 @@ module Syskit::Log
                             write_logfile_sample Time.now + 10, Time.now + 1, 20
                         end
                         FileUtils.touch logfile_path('test-events.log')
-                        call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                        call_cli('import', '--auto', '--min-duration=0',
+                                 '--store', datastore_path.to_s,
+                                 logfile_pathname.dirname.to_s, silent: true)
                         (logfile_pathname + datastore_m::Import::BASENAME_IMPORT_TAG).unlink
                         flexmock(datastore_m::Import).new_instances.should_receive(:normalize_dataset).
                             once.pass_thru
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             once.pass_thru
                         out, = capture_io do
-                            call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                            call_cli('import', '--auto', '--min-duration=0',
+                                     '--store', datastore_path.to_s,
+                                     logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /#{logfile_pathname} already seem to have been imported as .*Give --force/,
                             out
@@ -195,7 +210,9 @@ module Syskit::Log
                             write_logfile_sample Time.now + 10, Time.now + 1, 20
                         end
                         FileUtils.touch logfile_path('test-events.log')
-                        call_cli('import', '--auto', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                        call_cli('import', '--auto', '--min-duration=0',
+                                 '--store', datastore_path.to_s,
+                                 logfile_pathname.dirname.to_s, silent: true)
                         digest, _ = datastore_m::Import.find_import_info(logfile_pathname)
                         marker_path = datastore.core_path_of(digest) + "marker"
                         FileUtils.touch(marker_path)
@@ -205,7 +222,9 @@ module Syskit::Log
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             once.pass_thru
                         out, = capture_io do
-                            call_cli('import', '--auto', '--force', '--min-duration=0', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: false)
+                            call_cli('import', '--auto', '--force', '--min-duration=0',
+                                     '--store', datastore_path.to_s,
+                                     logfile_pathname.dirname.to_s, silent: false)
                         end
                         assert_match /Replacing existing dataset #{digest} with new one/, out
                         refute marker_path.exist?
@@ -219,7 +238,9 @@ module Syskit::Log
                         flexmock(datastore_m::Import).new_instances.should_receive(:move_dataset_to_store).
                             never
 
-                        call_cli('import', '--auto', '--min-duration=1', datastore_path.to_s, logfile_pathname.dirname.to_s, silent: true)
+                        call_cli('import', '--auto', '--min-duration=1',
+                                 '--store', datastore_path.to_s,
+                                 logfile_pathname.dirname.to_s, silent: true)
                     end
                     it "ignores datasets whose logical duration is lower than --min-duration" do
                         create_logfile('test.0.log') do
@@ -241,7 +262,8 @@ module Syskit::Log
 
                         out, = capture_io do
                             call_cli('import', '--auto', '--min-duration=5',
-                                     datastore_path.to_s, logfile_pathname.dirname.to_s,
+                                     '--store', datastore_path.to_s,
+                                     logfile_pathname.dirname.to_s,
                                      silent: false)
                         end
                         assert_match /#{logfile_pathname} lasts only 1.0s, ignored/, out
@@ -297,14 +319,14 @@ module Syskit::Log
                         should_receive(:index_build).
                         with(expected_store, expected_dataset('b'), Hash).once.
                         pass_thru
-                    call_cli('index', datastore_path.to_s)
+                    call_cli('index', '--store', datastore_path.to_s)
                 end
                 it "runs the indexer on the datasets of the store specified on the command line" do
                     flexmock(Syskit::Log::Datastore).
                         should_receive(:index_build).
                         with(expected_store, expected_dataset('a'), Hash).once.
                         pass_thru
-                    call_cli('index', datastore_path.to_s, 'a')
+                    call_cli('index', '--store', datastore_path.to_s, 'a')
                 end
             end
 
@@ -350,43 +372,49 @@ a0fa <no description>
 
                 it "raises if the query is invalid" do
                     assert_raises(Syskit::Log::Datastore::Dataset::InvalidDigest) do
-                        call_cli('list', datastore_path.to_s, 'not_a_sha', silent: false)
+                        call_cli('list', '--store', datastore_path.to_s,
+                                 'not_a_sha', silent: false)
                     end
                 end
 
                 it "lists all datasets if given only the datastore path" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, silent: false)
+                        call_cli('list', '--store', datastore_path.to_s, silent: false)
                     end
                     assert_equal [show_a0ea, show_a0fa].join, out
                 end
                 it "lists only the short digests if --digest is given" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, '--digest', silent: false)
+                        call_cli('list', '--store', datastore_path.to_s,
+                                 '--digest', silent: false)
                     end
                     assert_equal "a0ea\na0fa\n", out
                 end
                 it "lists only the short digests if --digest --long-digests are given" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, '--digest', '--long-digests', silent: false)
+                        call_cli('list', '--store', datastore_path.to_s,
+                                 '--digest', '--long-digests', silent: false)
                     end
                     assert_equal "a0ea\na0fa\n", out
                 end
                 it "accepts a digest prefix as argument" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, 'a0e', silent: false)
+                        call_cli('list', '--store', datastore_path.to_s,
+                                 'a0e', silent: false)
                     end
                     assert_equal show_a0ea, out
                 end
                 it "can match metadata exactly" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, 'test=1', silent: false)
+                        call_cli('list', '--store', datastore_path.to_s,
+                                 'test=1', silent: false)
                     end
                     assert_equal show_a0fa, out
                 end
                 it "can match metadata with a regexp" do
                     out, _err = capture_io do
-                        call_cli('list', datastore_path.to_s, 'array_test~[ac]', silent: false)
+                        call_cli('list', '--store', datastore_path.to_s,
+                                 'array_test~[ac]', silent: false)
                     end
                     assert_equal [show_a0ea, show_a0fa].join, out
                 end
@@ -394,7 +422,8 @@ a0fa <no description>
                 describe "--pocolog" do
                     it "shows the pocolog stream information" do
                         out, _err = capture_io do
-                            call_cli('list', datastore_path.to_s, 'a0e', '--pocolog', silent: false)
+                            call_cli('list', '--store', datastore_path.to_s,
+                                     'a0e', '--pocolog', silent: false)
                         end
                         pocolog_info =<<-EOF
   1 oroGen tasks in 2 streams
@@ -408,7 +437,8 @@ a0fa <no description>
                     end
                     it "handles empty streams gracefully" do
                         out, _err = capture_io do
-                            call_cli('list', datastore_path.to_s, 'a0f', '--pocolog', silent: false)
+                            call_cli('list', '--store', datastore_path.to_s,
+                                     'a0f', '--pocolog', silent: false)
                         end
                         pocolog_info =<<-EOF
   1 oroGen tasks in 2 streams
@@ -435,42 +465,44 @@ a0fa <no description>
 
                 it "raises if the query is invalid" do
                     assert_raises(Syskit::Log::Datastore::Dataset::InvalidDigest) do
-                        call_cli('metadata', datastore_path.to_s, 'not_a_sha', '--get', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s,
+                                 'not_a_sha', '--get', silent: false)
                     end
                 end
 
                 describe '--set' do
                     it "sets metadata on the given dataset" do
-                        call_cli('metadata', datastore_path.to_s, 'a0e', '--set', 'debug=true', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s,
+                                 'a0e', '--set', 'debug=true', silent: false)
                         assert_equal Set['true'], datastore.get('a0ea').metadata['debug']
                         assert_nil datastore.get('a0fa').metadata['debug']
                     end
                     it "sets metadata on matching datasets" do
-                        call_cli('metadata', datastore_path.to_s, 'test=b', '--set', 'debug=true', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, 'test=b', '--set', 'debug=true', silent: false)
                         assert_nil datastore.get('a0ea').metadata['debug']
                         assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
                     end
                     it "sets metadata on all datasets if no query is given" do
-                        call_cli('metadata', datastore_path.to_s, '--set', 'debug=true', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, '--set', 'debug=true', silent: false)
                         assert_equal Set['true'], datastore.get('a0ea').metadata['debug']
                         assert_equal Set['true'], datastore.get('a0fa').metadata['debug']
                     end
                     it "collects all set arguments with the same key" do
-                        call_cli('metadata', datastore_path.to_s, '--set', 'test=a', 'test=b', 'test=c', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, '--set', 'test=a', 'test=b', 'test=c', silent: false)
                         assert_equal Set['a', 'b', 'c'], datastore.get('a0ea').metadata['test']
                     end
                     it "raises if the argument to set is not a key=value association" do
                         assert_raises(ArgumentError) do
-                            call_cli('metadata', datastore_path.to_s, 'a0ea', '--set', 'debug', silent: false)
+                            call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', '--set', 'debug', silent: false)
                         end
                     end
                 end
 
                 describe '--get' do
                     it "lists all metadata on all datasets if no query is given" do
-                        call_cli('metadata', datastore_path.to_s, 'a0ea', '--set', 'test=a,b', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', '--set', 'test=a,b', silent: false)
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, '--get', silent: false)
+                            call_cli('metadata', '--store', datastore_path.to_s, '--get', silent: false)
                         end
                         assert_equal "a0ea test=a,b\na0fa test=b\n", out
                     end
@@ -478,27 +510,27 @@ a0fa <no description>
                         flexmock(Syskit::Log::Datastore).new_instances.should_receive(:short_digest).
                             and_return { |dataset| dataset.digest[0, 3] }
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, '--get', silent: false)
+                            call_cli('metadata', '--store', datastore_path.to_s, '--get', silent: false)
                         end
                         assert_equal "a0e test=a\na0f test=b\n", out
                     end
                     it "displays the long digest if --long-digest is given" do
                         flexmock(datastore).should_receive(:short_digest).never
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, '--get', '--long-digest', silent: false)
+                            call_cli('metadata', '--store', datastore_path.to_s, '--get', '--long-digest', silent: false)
                         end
                         assert_equal "a0ea test=a\na0fa test=b\n", out
                     end
                     it "lists the requested metadata of the matching datasets" do
-                        call_cli('metadata', datastore_path.to_s, 'a0ea', '--set', 'test=a,b', 'debug=true', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', '--set', 'test=a,b', 'debug=true', silent: false)
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, 'a0ea', '--get', 'test', silent: false)
+                            call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', '--get', 'test', silent: false)
                         end
                         assert_equal "a0ea test=a,b\n", out
                     end
                     it "replaces requested metadata that are unset by <unset>" do
                         out, _err = capture_io do
-                            call_cli('metadata', datastore_path.to_s, 'a0ea', '--get', 'debug', silent: false)
+                            call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', '--get', 'debug', silent: false)
                         end
                         assert_equal "a0ea debug=<unset>\n", out
                     end
@@ -506,13 +538,13 @@ a0fa <no description>
 
                 it "raises if both --get and --set are provided" do
                     assert_raises(ArgumentError) do
-                        call_cli('metadata', datastore_path.to_s, 'a0ea', '--get', 'debug', '--set', 'test=10', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', '--get', 'debug', '--set', 'test=10', silent: false)
                     end
                 end
 
                 it "raises if neither --get nor --set are provided" do
                     assert_raises(ArgumentError) do
-                        call_cli('metadata', datastore_path.to_s, 'a0ea', silent: false)
+                        call_cli('metadata', '--store', datastore_path.to_s, 'a0ea', silent: false)
                     end
                 end
             end
