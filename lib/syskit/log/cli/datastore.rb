@@ -46,10 +46,10 @@ module Syskit::Log
                 end
 
                 def show_dataset(pastel, store, dataset, long_digest: false)
-                    description = dataset.metadata_fetch_all('description', "<no description>")
-                    if !long_digest
-                        digest = store.short_digest(dataset)
-                    end
+                    description = dataset.metadata_fetch_all(
+                        'description', '<no description>'
+                    )
+                    digest = store.short_digest(dataset) unless long_digest
                     format = "% #{digest.size}s"
                     description.zip([digest]) do |a, b|
                         puts "#{pastel.bold(format % [b])} #{a}"
@@ -57,6 +57,7 @@ module Syskit::Log
                     metadata = dataset.metadata
                     metadata.each do |k, v|
                         next if k == 'description'
+
                         if v.size == 1
                             puts "  #{k}: #{v.first}"
                         else
@@ -69,19 +70,20 @@ module Syskit::Log
                 end
 
                 def format_date(time)
-                    time.strftime("%Y-%m-%d")
+                    time.strftime('%Y-%m-%d')
                 end
 
                 def format_time(time)
-                    time.strftime("%H:%M:%S.%6N %z")
+                    time.strftime('%H:%M:%S.%6N %z')
                 end
 
                 def format_duration(time)
-                    "%4i:%02i:%02i.%06i" % [
+                    '%4i:%02i:%02i.%06i' % [
                         Integer(time / 3600),
                         Integer((time % 3600) / 60),
                         Integer(time % 60),
-                        Integer((time * 1_000_000) % 1_000_000)]
+                        Integer((time * 1_000_000) % 1_000_000)
+                    ]
                 end
 
                 def show_task_objects(objects, name_field_size)
@@ -98,41 +100,51 @@ module Syskit::Log
                         if stream.empty?
                             puts format % ["#{name}:", 'empty']
                         else
-                            interval_lg = stream.interval_lg.map { |t| format_date(t) + " " + format_time(t) }
+                            interval_lg = stream.interval_lg.map do |t|
+                                format_date(t) + ' ' + format_time(t)
+                            end
                             duration_lg = format_duration(stream.duration_lg)
-                            puts format % ["#{name}:", "#{stream_sizes[i]} samples from #{interval_lg[0]} to #{interval_lg[1]} [#{duration_lg}]"]
+                            puts format % [
+                                "#{name}:",
+                                "#{stream_sizes[i]} samples from #{interval_lg[0]} "\
+                                "to #{interval_lg[1]} [#{duration_lg}]"
+                            ]
                         end
                     end
                 end
 
                 def show_dataset_pocolog(pastel, store, dataset)
-                    tasks = dataset.each_task(load_models: false, skip_tasks_without_models: false).to_a
-                    puts "  #{tasks.size} oroGen tasks in #{dataset.each_pocolog_path.to_a.size} streams"
+                    tasks = dataset.each_task(
+                        load_models: false, skip_tasks_without_models: false
+                    ).to_a
+                    stream_count = dataset.each_pocolog_path.to_a.size
+                    puts "  #{tasks.size} oroGen tasks in #{stream_count} streams"
                     tasks.each do |task|
                         ports = task.each_port_stream.to_a
                         properties = task.each_property_stream.to_a
-                        puts "    #{task.task_name}[#{task.orogen_model_name}]: #{ports.size} ports and #{properties.size} properties"
-                        name_field_size = (ports.map { |name, _| name.size } + properties.map { |name, _| name.size }).max
+                        puts "    #{task.task_name}[#{task.orogen_model_name}]: "\
+                             "#{ports.size} ports and #{properties.size} properties"
+                        name_field_size = (
+                            ports.map { |name, _| name.size } +
+                            properties.map { |name, _| name.size }
+                        ).max
                         unless ports.empty?
-                            puts "    Ports:"
+                            puts '    Ports:'
                             show_task_objects(ports, name_field_size)
                         end
                         unless properties.empty?
-                            puts "    Properties:"
+                            puts '    Properties:'
                             show_task_objects(properties, name_field_size)
                         end
                     end
                 end
 
-                def show_dataset_roby(pastel, store, dataset)
-                end
+                def show_dataset_roby(pastel, store, dataset); end
 
                 def resolve_datasets(store, *query)
-                    if query.empty?
-                        return store.each_dataset
-                    end
+                    return store.each_dataset if query.empty?
 
-                    matchers = Hash.new
+                    matchers = {}
                     query.each do |kv|
                         if kv =~ /=/
                             k, v = kv.split('=')
@@ -147,8 +159,10 @@ module Syskit::Log
                         end
                     end
                     store.each_dataset.find_all do |dataset|
-                        Hash['digest' => [dataset.digest]].merge(dataset.metadata).any? do |key, values|
-                            if v_match = matchers[key]
+                        all_metadata = { 'digest' => [dataset.digest] }
+                                       .merge(dataset.metadata)
+                        all_metadata.any? do |key, values|
+                            if (v_match = matchers[key])
                                 values.any? { |v| v_match === v }
                             end
                         end
@@ -184,19 +198,21 @@ module Syskit::Log
 
             desc 'import DATASTORE_PATH PATH', 'normalize and import a raw dataset into a syskit-pocolog datastore'
             method_option :auto, desc: 'import all datasets under PATH',
-                type: :boolean, default: false
+                                 type: :boolean, default: false
             method_option :force, desc: 'overwrite existing datasets',
-                type: :boolean, default: false
-            method_option :min_duration, desc: 'skip datasets whose duration is lower than this (in seconds)',
-                type: :numeric, default: 60
+                                  type: :boolean, default: false
+            method_option :min_duration, desc: 'skip datasets whose duration is lower '\
+                                               'than this (in seconds)',
+                                         type: :numeric, default: 60
             def import(datastore_path, root_path)
                 root_path = Pathname.new(root_path).realpath
                 if options[:auto]
-                    paths = Array.new
+                    paths = []
                     root_path.find do |p|
-                        is_raw_dataset = p.directory? &&
-                            Pathname.enum_for(:glob, p + "*-events.log").any? { true } &&
-                            Pathname.enum_for(:glob, p + "*.0.log").any? { true }
+                        is_raw_dataset =
+                            p.directory? &&
+                            Pathname.enum_for(:glob, p + '*-events.log').any? { true } &&
+                            Pathname.enum_for(:glob, p + '*.0.log').any? { true }
                         if is_raw_dataset
                             paths << p
                             Find.prune
@@ -213,10 +229,16 @@ module Syskit::Log
                 paths.each do |p|
                     reporter.title "Processing #{p}"
 
-                    last_import_digest, last_import_time = Syskit::Log::Datastore::Import.find_import_info(p)
-                    already_imported = (last_import_digest && datastore.has?(last_import_digest))
+                    last_import_digest, last_import_time =
+                        Syskit::Log::Datastore::Import.find_import_info(p)
+                    already_imported = last_import_digest &&
+                                       datastore.has?(last_import_digest)
                     if already_imported && !options[:force]
-                        reporter.info "#{p} already seem to have been imported as #{last_import_digest} at #{last_import_time}. Give --force to import again"
+                        reporter.info(
+                            "#{p} already seem to have been imported as "\
+                            "#{last_import_digest} at #{last_import_time}. Give "\
+                            '--force to import again'
+                        )
                         next
                     end
 
@@ -225,26 +247,38 @@ module Syskit::Log
                         dataset = importer.normalize_dataset(
                             p, core_path, cache_path: cache_path,
                                           reporter: reporter)
-                        stream_duration = dataset.each_pocolog_stream.map do |stream|
-                            stream.duration_lg
-                        end.max
+                        stream_duration = dataset.each_pocolog_stream
+                                                 .map(&:duration_lg)
+                                                 .max
                         stream_duration ||= 0
 
                         if already_imported
                             # --force is implied as otherwise we would have
                             # skipped earlier
-                            reporter.info "#{p} seem to have already been imported but --force is given, overwriting"
+                            reporter.info(
+                                "#{p} seem to have already been imported but --force "\
+                                'is given, overwriting'
+                            )
                             datastore.delete(last_import_digest)
                         end
 
                         if stream_duration >= options[:min_duration]
                             begin
-                                importer.move_dataset_to_store(p, dataset, force: options[:force], reporter: reporter)
+                                importer.move_dataset_to_store(
+                                    p, dataset, force: options[:force],
+                                                reporter: reporter
+                                )
                             rescue Syskit::Log::Datastore::Import::DatasetAlreadyExists
-                                reporter.info "#{p} already seem to have been imported as #{dataset.compute_dataset_digest}. Give --force to import again"
+                                reporter.info(
+                                    "#{p} already seem to have been imported as "\
+                                    "#{dataset.compute_dataset_digest}. Give "\
+                                    '--force to import again'
+                                )
                             end
                         else
-                            reporter.info "#{p} lasts only %.1fs, ignored" % [stream_duration]
+                            reporter.info(
+                                "#{p} lasts only %.1fs, ignored" % [stream_duration]
+                            )
                         end
                     end
                 end
