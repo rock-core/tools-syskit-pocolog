@@ -1,3 +1,5 @@
+require 'syskit'
+
 module Syskit::Log
     module Plugin
         def self.setup(app)
