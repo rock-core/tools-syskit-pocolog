@@ -1,4 +1,4 @@
-require 'syskit/log/cli/log'
+require 'syskit/log/cli/replay'
 
 class CLI < Thor
     desc 'replay', 'replaying of log data'

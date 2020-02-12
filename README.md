@@ -4,14 +4,14 @@ Integration of pocolog-based log replay in a Syskit application
 
 ## Installation
 
-Add `tools/syskit-pocolog` either as a dependency of one of your bundles, or
+Add `tools/syskit-log` either as a dependency of one of your bundles, or
 explicitely in `autoproj/manifest`
 
 ## Usage
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/rock-core/tools-syskit-pocolog.
+Bug reports and pull requests are welcome on GitHub at https://github.com/rock-core/tools-syskit-log.
 
 ## License
 
