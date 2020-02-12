@@ -7,7 +7,7 @@ module Syskit::Log
     # It is returned from the main stream pool by
     # {Streams#find_task_by_name)
     class TaskStreams < Streams
-        def initialize(streams = Array.new, task_name: nil)
+        def initialize(streams = [], task_name: nil)
             super(streams)
             @task_name = task_name
             @orogen_model_name = nil
@@ -33,10 +33,11 @@ module Syskit::Log
         # @raise (see orogen_model_name)
         def model
             name = orogen_model_name
-            if model = Syskit::TaskContext.find_model_from_orogen_name(name)
-                model
-            else raise Unknown, "cannot find a Syskit model for '#{name}'"
+            unless (model = Syskit::TaskContext.find_model_from_orogen_name(name))
+                raise Unknown, "cannot find a Syskit model for '#{name}'"
             end
+
+            model
         end
 
         # Returns the replay task model for this streams
@@ -49,10 +50,11 @@ module Syskit::Log
         # @yieldparam [String] port_name the name of the port
         # @yieldparam [Pocolog::DataStream] stream the data stream
         def each_port_stream
-            return enum_for(__method__) if !block_given?
+            return enum_for(__method__) unless block_given?
 
             streams.each do |s|
-                if (s.metadata['rock_stream_type'] == 'port') && (port_name = s.metadata['rock_task_object_name'])
+                if (s.metadata['rock_stream_type'] == 'port') &&
+                   (port_name = s.metadata['rock_task_object_name'])
                     yield(port_name, s)
                 end
             end
@@ -63,10 +65,11 @@ module Syskit::Log
         # @yieldparam [String] property_name the name of the property
         # @yieldparam [Pocolog::DataStream] stream the data stream
         def each_property_stream
-            return enum_for(__method__) if !block_given?
+            return enum_for(__method__) unless block_given?
 
             streams.each do |s|
-                if (s.metadata['rock_stream_type'] == 'property') && (port_name = s.metadata['rock_task_object_name'])
+                if (s.metadata['rock_stream_type'] == 'property') &&
+                   (port_name = s.metadata['rock_task_object_name'])
                     yield(port_name, s)
                 end
             end
@@ -77,8 +80,9 @@ module Syskit::Log
             objects = find_all_streams(RockStreamMatcher.new.ports.object_name(name))
             if objects.size > 1
                 raise Ambiguous, "there are multiple ports with the name #{name}"
-            else objects.first
             end
+
+            objects.first
         end
 
         # Find a property stream that matches the given name
@@ -86,8 +90,9 @@ module Syskit::Log
             objects = find_all_streams(RockStreamMatcher.new.properties.object_name(name))
             if objects.size > 1
                 raise Ambiguous, "there are multiple properties with the name #{name}"
-            else objects.first
             end
+
+            objects.first
         end
 
         def respond_to_missing?(m, include_private = true)
@@ -118,19 +123,21 @@ module Syskit::Log
         # @raise Ambiguous if some streams have different values for the
         #   metadata
         def unique_metadata(metadata_name)
-            if streams.empty?
-                raise Unknown, "no streams"
-            end
+            raise Unknown, 'no streams' if streams.empty?
 
             model_name = nil
             streams.each do |s|
-                if name = s.metadata[metadata_name]
-                    model_name ||= name
-                    if model_name != name
-                        raise Ambiguous, "streams declare more than one value for #{metadata_name}: #{model_name} and #{name}"
-                    end
-                else
-                    raise Unknown, "stream #{s.name} does not declare the #{metadata_name} metadata"
+                unless (name = s.metadata[metadata_name])
+                    raise Unknown,
+                          "stream #{s.name} does not declare the "\
+                          "#{metadata_name} metadata"
+                end
+
+                model_name ||= name
+                if model_name != name
+                    raise Ambiguous,
+                          'streams declare more than one value for '\
+                          "#{metadata_name}: #{model_name} and #{name}"
                 end
             end
             model_name

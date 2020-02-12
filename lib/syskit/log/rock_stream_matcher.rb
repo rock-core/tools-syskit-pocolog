@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Syskit::Log
     # A stream matcher for Rock's standard metadata
     #
@@ -11,7 +13,7 @@ module Syskit::Log
         attr_reader :query
 
         def initialize
-            @query = Hash.new
+            @query = {}
         end
 
         # @api private
@@ -22,11 +24,13 @@ module Syskit::Log
         # @param [String] key the metadata key
         # @param [Regexp] rx the regular expression
         def add_regex(key, rx)
-            if existing = query[key]
-                query[key] = Regexp.union(existing, rx)
-            else
-                query[key] =  rx
-            end
+            query[key] =
+                if (existing = query[key])
+                    Regexp.union(existing, rx)
+                else
+                    rx
+                end
+
             self
         end
 
