@@ -1,0 +1,13 @@
+<package>
+    <description brief="log management and replay for Syskit">
+    </description>
+    <maintainer>Sylvain Joyeux/sylvain.joyeux@m4x.org</maintainer>
+    <license>GPL v2 or later</license>
+
+    <depend package="tools/syskit" />
+    <depend_optional package="daru" />
+
+    <test_depend package="minitest" />
+    <test_depend package="flexmock" />
+</package>
+

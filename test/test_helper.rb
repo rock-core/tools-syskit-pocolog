@@ -54,7 +54,7 @@ module Syskit::Log
                     dataset.metadata_set(k, *v)
                 end
                 dataset.metadata_write_to_file
-                Datastore.index_build(datastore, dataset)
+                Datastore.index_build(@datastore, dataset)
             end
         end
 
