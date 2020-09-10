@@ -22,6 +22,8 @@ module Syskit::Log
         end
 
         # The list of streams that are available
+        #
+        # @return [Array<LazyDataStream>]
         attr_reader :streams
 
         # The common registry
@@ -121,7 +123,7 @@ module Syskit::Log
 
         # Enumerate the streams
         #
-        # @yieldparam [Pocolog::DataStream]
+        # @yieldparam [Pocolog::DataStream,LazyDataStream]
         def each_stream(&block)
             streams.each(&block)
         end
@@ -215,6 +217,8 @@ module Syskit::Log
         end
 
         # Find all streams whose metadata match the given query
+        #
+        # @return [Array<Pocolog::DataStream,LazyDataStream>]
         def find_all_streams(query)
             streams.find_all { |s| query === s }
         end
