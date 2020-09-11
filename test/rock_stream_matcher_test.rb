@@ -54,11 +54,17 @@ module Syskit::Log
             end
         end
 
-        describe "the task model" do
+        describe "matching the task model" do
             it "matches the task model by name" do
                 task_m = Syskit::TaskContext.new_submodel
                 flexmock(task_m.orogen_model, :strict, name: 'orogen_model::Test')
                 assert_finds_streams subject.task_model(task_m), 'stream_with_task_model'
+            end
+        end
+
+        describe "matching the type" do
+            it "matches the type by name" do
+                assert_finds_streams subject.type(/double/), 'task.port'
             end
         end
     end

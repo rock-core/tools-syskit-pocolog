@@ -65,17 +65,25 @@ module Syskit::Log
             add_regex('rock_task_model', model.orogen_model.name)
         end
 
+        # Match the type name
+        #
+        # @param [String,Regexp] name
+        def type(name)
+            add_regex('type', name)
+        end
+
         # Tests whether a stream matches this query
         #
         # @param [Pocolog::DataStream] stream
         # @return [Boolean]
         def ===(stream)
             query.all? do |key, matcher|
-                if metadata = stream.metadata[key]
+                if key == 'type'
+                    matcher === stream.type.name
+                elsif (metadata = stream.metadata[key])
                     matcher === metadata
                 end
             end
         end
     end
 end
-
