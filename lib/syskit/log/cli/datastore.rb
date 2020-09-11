@@ -210,7 +210,7 @@ module Syskit::Log
                 end
             end
 
-            desc 'import DATASTORE_PATH PATH [DESCRIPTION]',
+            desc 'import PATH [DESCRIPTION]',
                  'normalize and import a raw dataset into a syskit-pocolog datastore'
             method_option :auto, desc: 'import all datasets under PATH',
                                  type: :boolean, default: false
@@ -333,7 +333,7 @@ module Syskit::Log
                 end
             end
 
-            desc 'list DATASTORE_PATH [QUERY]', 'list datasets and their information'
+            desc 'list [QUERY]', 'list datasets and their information'
             method_option :digest, desc: 'only show the digest and no other information (for scripting)',
                 type: :boolean, default: false
             method_option :long_digests, desc: 'display digests in full form, instead of shortening them',
@@ -368,7 +368,7 @@ module Syskit::Log
                 end
             end
 
-            desc 'metadata DATASTORE_PATH [QUERY] [--set=KEY=VALUE KEY=VALUE|--get=KEY]',
+            desc 'metadata [QUERY] [--set=KEY=VALUE KEY=VALUE|--get=KEY]',
                 'sets or gets metadata values for a dataset or datasets'
             method_option :set, desc: 'the key=value associations to set',
                 type: :array
