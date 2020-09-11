@@ -210,6 +210,35 @@ module Syskit::Log
                         end
                     end
                 end
+
+                KNOWN_STREAM_IMPLICIT_MATCHERS =
+                    %w[ports properties].freeze
+                KNOWN_STREAM_EXPLICIT_MATCHERS =
+                    %w[object_name task_name task_model].freeze
+
+                # Resolve the list of streams that match the given query
+                #
+                # @param [[Dataset]] datasets the list of datasets whose
+                #   streams are being resolved
+                # @param query (see #parse_query). The available matchers are
+                #   the methods of {RockTaskMatcher}
+                #
+                # @return [[Streams]] per-dataset list of matching streams
+                def resolve_streams(datasets, *query)
+                    implicit, explicit = parse_query(*query)
+
+                    matcher = RockStreamMatcher.new
+                    implicit.each do |n|
+                        matcher.send(n)
+                    end
+                    explicit.each do |k, v|
+                        matcher.send(k, v)
+                    end
+
+                    datasets.flat_map do |ds|
+                        ds.streams.find_all_streams(matcher)
+                    end
+                end
             end
 
             desc 'normalize PATH [--out OUTPUT]', 'normalizes a data stream into a format that is suitable for the other log management commands to work'
@@ -475,7 +504,52 @@ module Syskit::Log
                     end
                 end
             end
+
+            desc "find-streams [QUERY]", "find data streams matching the given query"
+            long_desc <<~DESC
+                Finds data streams matching a query
+
+                The command recognizes the following query items:
+
+                - "ports" or "properties" restrict to streams that are resp. from a port
+                  or a property
+
+                - "object_name" matches the port/property name
+
+                - "task_name" matches the name of the port/poperty's task
+
+                - "task_model" matches the model of the port/property's task
+
+                - "type" matches the typename of the port/property's task
+
+                All matchers except ports and properties expect a string to match
+                against. The KEY=STRING form matches exactly, while KEY~STRING
+                interprets the string as a regular expression.
+
+                Examples:
+
+                Match all ports of type /base/Time with:
+                syskit ds find-streams ports type=/base/Time
+
+                Match all ports and properties of tasks that have "control" in the
+                name with: syskit ds find-streams task_name~control
+            DESC
+            method_option :ds_filter, desc: "query to apply to the datasets",
+                                      type: :array, default: []
+            def find_streams(*query)
+                store = open_store
+                datasets = resolve_datasets(store, *options[:ds_filter])
+                streams = resolve_streams(datasets, *query)
+
+                if streams.empty?
+                    puts 'no streams match the query'
+                    return
+                end
+
+                name_field_size = streams.map { |s| s.name.size }.max
+                streams = streams.map { |s| [s.name, s] }
+                show_task_objects(streams, name_field_size)
+            end
         end
     end
 end
-

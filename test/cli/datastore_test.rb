@@ -585,6 +585,79 @@ a0fa <no description>
                     end
                 end
             end
+
+            describe "#find-streams" do
+                attr_reader :show_a0ea, :show_a0fa, :base_time
+                before do
+                    @base_time = Time.at(34200, 234)
+                    create_dataset "a0ea", metadata: Hash['description' => 'first', 'test' => ['2'], 'array_test' => ['a', 'b']] do
+                        create_logfile('test.0.log') do
+                            create_logfile_stream 'test', metadata: Hash['rock_stream_type' => 'port', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'port0', 'rock_task_model' => 'test::Task']
+                            write_logfile_sample base_time, base_time, 0
+                            write_logfile_sample base_time + 1, base_time + 10, 1
+                        end
+                        create_logfile('test_property.0.log') do
+                            create_logfile_stream 'test_property', metadata: Hash['rock_stream_type' => 'property', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'property0', 'rock_task_model' => 'test::Task']
+                            write_logfile_sample base_time, base_time + 1, 2
+                            write_logfile_sample base_time + 1, base_time + 9, 3
+                        end
+                    end
+                    create_dataset "a0fa", metadata: Hash['test' => ['1'], 'array_test' => ['c', 'd']] do
+                        create_logfile('test.0.log') do
+                            create_logfile_stream 'test', metadata: Hash['rock_stream_type' => 'port', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'port0', 'rock_task_model' => 'test::Task']
+                        end
+                        create_logfile('test_property.0.log') do
+                            create_logfile_stream 'test_property', metadata: Hash['rock_stream_type' => 'property', 'rock_task_name' => 'task0', 'rock_task_object_name' => 'property0', 'rock_task_model' => 'test::Task']
+                        end
+                    end
+                end
+
+                it "lists all streams that match the query" do
+                    out, _err = capture_io do
+                        call_cli("find-streams", "--store", datastore_path.to_s,
+                                 "object_name=port0", silent: false)
+                    end
+                    assert_equal <<~EXPECTED.chomp, out.split("\n").map(&:strip).join("\n")
+                        test: 2 samples from 1970-01-01 06:30:00.000234 -0300 to 1970-01-01 06:30:10.000234 -0300 [   0:00:10.000000]
+                        test: empty
+                    EXPECTED
+                end
+
+                it "filters ports" do
+                    out, _err = capture_io do
+                        call_cli("find-streams", "--store", datastore_path.to_s,
+                                 "ports", silent: false)
+                    end
+                    assert_equal <<~EXPECTED.chomp, out.split("\n").map(&:strip).join("\n")
+                        test: 2 samples from 1970-01-01 06:30:00.000234 -0300 to 1970-01-01 06:30:10.000234 -0300 [   0:00:10.000000]
+                        test: empty
+                    EXPECTED
+                end
+
+                it "filters properties" do
+                    out, _err = capture_io do
+                        call_cli("find-streams", "--store", datastore_path.to_s,
+                                 "properties", silent: false)
+                    end
+                    assert_equal <<~EXPECTED.chomp, out.split("\n").map(&:strip).join("\n")
+                        test_property: 2 samples from 1970-01-01 06:30:01.000234 -0300 to 1970-01-01 06:30:09.000234 -0300 [   0:00:08.000000]
+                        test_property: empty
+                    EXPECTED
+                end
+
+                it "handles partial matches" do
+                    out, _err = capture_io do
+                        call_cli("find-streams", "--store", datastore_path.to_s,
+                                 "object_name~^p", silent: false)
+                    end
+                    assert_equal <<~EXPECTED.chomp, out.split("\n").map(&:strip).join("\n")
+                        test:          2 samples from 1970-01-01 06:30:00.000234 -0300 to 1970-01-01 06:30:10.000234 -0300 [   0:00:10.000000]
+                        test_property: 2 samples from 1970-01-01 06:30:01.000234 -0300 to 1970-01-01 06:30:09.000234 -0300 [   0:00:08.000000]
+                        test:          empty
+                        test_property: empty
+                    EXPECTED
+                end
+            end
         end
     end
 end
