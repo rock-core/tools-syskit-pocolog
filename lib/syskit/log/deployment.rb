@@ -36,7 +36,9 @@ module Syskit::Log
             executed_task.start_event.on do
                 model.each_stream_mapping do |stream, model_port|
                     orocos_port = model_port.bind(executed_task).to_orocos_port
-                    stream_to_port[stream] = orocos_port
+                    unless orocos_port.name == 'state'
+                        stream_to_port[stream] = orocos_port
+                    end
                 end
             end
             executed_task.stop_event.on do
