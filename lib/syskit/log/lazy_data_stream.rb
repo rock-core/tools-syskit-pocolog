@@ -73,6 +73,15 @@ module Syskit::Log
             file.streams.first
         end
 
+        # Return an object that allows to enumerate this stream's samples
+        #
+        # This causes the stream to be actually loaded
+        #
+        # @return [Pocolog::SampleEnumerator]
+        def samples
+            syskit_eager_load.samples
+        end
+
         def duration_lg
             if interval_lg.empty?
                 0
