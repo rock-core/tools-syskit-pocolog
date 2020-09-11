@@ -42,20 +42,19 @@ module Syskit::Log
             core_path.mkpath
             move_logfile_path(core_path + "pocolog", delete_current: false)
             dataset = Datastore::Dataset.new(core_path, cache: @datastore.cache_path_of(digest))
-            if block_given?
-                begin
-                    yield
-                ensure
-                    identity = dataset.compute_dataset_identity_from_files
-                    dataset.write_dataset_identity_to_metadata_file(identity)
-                    metadata.each do |k, v|
-                        dataset.metadata_set(k, *v)
-                    end
-                    dataset.metadata_write_to_file
-                    Datastore.index_build(datastore, dataset)
-                end
-            else
+            return dataset unless block_given?
+
+            begin
+                yield
                 dataset
+            ensure
+                identity = dataset.compute_dataset_identity_from_files
+                dataset.write_dataset_identity_to_metadata_file(identity)
+                metadata.each do |k, v|
+                    dataset.metadata_set(k, *v)
+                end
+                dataset.metadata_write_to_file
+                Datastore.index_build(datastore, dataset)
             end
         end
 

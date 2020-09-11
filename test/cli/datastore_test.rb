@@ -330,6 +330,43 @@ module Syskit::Log
                 end
             end
 
+            describe "#path" do
+                before do
+                    @a0ea_dataset = create_dataset(
+                        "a0ea", metadata: {
+                            "description" => "first",
+                            "test" => %w[2], "common" => %w[tag],
+                            "array_test" => %w[a b]
+                        }
+                    ) {}
+                    @a0fa_dataset = create_dataset(
+                        "a0fa", metadata: {
+                            "test" => %w[1], "common" => %w[tbg],
+                            "array_test" => %w[c d]
+                        }
+                    ) {}
+                end
+
+                it "lists the path to the given dataset digest" do
+                    out, = capture_io do
+                        call_cli("path", "--store", datastore_path.to_s,
+                                 "a0ea", silent: false)
+                    end
+                    assert_equal "a0ea #{@a0ea_dataset.dataset_path}", out.chomp
+                end
+
+                it "lists all matching datasets" do
+                    out, = capture_io do
+                        call_cli("path", "--store", datastore_path.to_s,
+                                 "common~t.g", silent: false)
+                    end
+                    assert_equal <<~OUTPUT, out
+                        a0ea #{@a0ea_dataset.dataset_path}
+                        a0fa #{@a0fa_dataset.dataset_path}
+                    OUTPUT
+                end
+            end
+
             describe "#list" do
                 attr_reader :show_a0ea, :show_a0fa, :base_time
                 before do

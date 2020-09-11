@@ -155,25 +155,53 @@ module Syskit::Log
 
                 def show_dataset_roby(pastel, store, dataset); end
 
+                # @api private
+                #
+                # Parse a query
+
+                # @param [String] query query statements of the form VALUE,
+                #   KEY=VALUE and KEY~VALUE. The `=` sign matches exactly, while
+                #   `~` matches through a regular expression. Entries with no
+                #   `=` and `~` signs are returned separately
+                #
+                # @return [([String],{String=>#===})] a list of implicit
+                #   statements (without = and ~) and a list of key to a matching
+                #   object.
+                def parse_query(*query)
+                    implicit = []
+                    explicit = query.each_with_object({}) do |kv, matchers|
+                        if kv =~ /=/
+                            k, v = kv.split("=")
+                            matchers[k] = v
+                        elsif kv =~ /~/
+                            k, v = kv.split("~")
+                            matchers[k] = /#{v}/
+                        else # assume this is a digest
+                            implicit << kv
+                        end
+                    end
+                    [implicit, explicit]
+                end
+
+                # Resolve the list of datasets that match the given query
+                #
+                # @param [Datastore] store the datastore whose datasets are being
+                #   resolved
+                # @param query (see #parse_query)
+                #
+                # @return [[Datastore]] matching datastores
                 def resolve_datasets(store, *query)
                     return store.each_dataset if query.empty?
 
-                    matchers = {}
-                    query.each do |kv|
-                        if kv =~ /=/
-                            k, v = kv.split('=')
-                            matchers[k] = v
-                        elsif kv =~ /~/
-                            k, v = kv.split('~')
-                            matchers[k] = /#{v}/
-                        else # assume this is a digest
-                            Syskit::Log::Datastore::Dataset.
-                                validate_encoded_short_digest(kv)
-                            matchers['digest'] = /^#{kv}/
-                        end
+                    implicit, matchers = parse_query(*query)
+                    if (digest = implicit.first)
+                        Syskit::Log::Datastore::Dataset
+                            .validate_encoded_short_digest(digest)
+                        matchers["digest"] = /^#{digest}/
                     end
+
                     store.each_dataset.find_all do |dataset|
-                        all_metadata = { 'digest' => [dataset.digest] }
+                        all_metadata = { "digest" => [dataset.digest] }
                                        .merge(dataset.metadata)
                         all_metadata.any? do |key, values|
                             if (v_match = matchers[key])
@@ -330,6 +358,25 @@ module Syskit::Log
                     Syskit::Log::Datastore.index_build(
                         store, d, force: options[:force], reporter: reporter
                     )
+                end
+            end
+
+            desc 'path [QUERY]', 'list path to datasets'
+            method_option :long_digests,
+                          desc: 'display digests in full, instead of shortening them',
+                          type: :boolean, default: false
+            def path(*query)
+                store = open_store
+                datasets = resolve_datasets(store, *query)
+                datasets.each do |dataset|
+                    digest =
+                        if options[:long_digests]
+                            dataset.digest
+                        else
+                            store.short_digest(dataset)
+                        end
+
+                    puts "#{digest} #{dataset.dataset_path}"
                 end
             end
 
