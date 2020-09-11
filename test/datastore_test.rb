@@ -148,6 +148,12 @@ module Syskit::Log
                     datastore.get(Datastore::Dataset.string_digest("does_not_exist"))
                 end
             end
+
+            it "accepts a short digest" do
+                dataset = datastore.get(digest[0, 5])
+                assert_kind_of Datastore::Dataset, dataset
+                assert_equal dataset_path, dataset.dataset_path
+            end
         end
 
         describe "#find_dataset_from_short_digest" do

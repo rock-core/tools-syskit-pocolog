@@ -120,11 +120,20 @@ module Syskit::Log
 
         # Get an existing dataset
         def get(digest)
-            if !has?(digest)
-                raise ArgumentError, "no dataset with digest #{digest} exist"
+            unless has?(digest)
+                # Try to see if digest is a short digest
+                if (dataset = find_dataset_from_short_digest(digest))
+                    return dataset
+                end
+
+                raise ArgumentError,
+                      "no dataset with digest #{digest} exist"
             end
 
-            dataset = Dataset.new(core_path_of(digest), digest: digest, cache: cache_path_of(digest))
+            dataset = Dataset.new(
+                core_path_of(digest),
+                digest: digest, cache: cache_path_of(digest)
+            )
             dataset.weak_validate_identity_metadata
             dataset.metadata
             dataset
