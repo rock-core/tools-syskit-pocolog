@@ -187,5 +187,46 @@ module Syskit::Log
                 assert_equal "a0ea", datastore.short_digest(flexmock(digest: "a0ea"), size: 2)
             end
         end
+
+        describe "#find_all" do
+            before do
+                @ds_e = create_dataset("a0ea", metadata: { "a" => %w[some values] }) {}
+                @ds_f = create_dataset("a0fa", metadata: { "a" => %w[other values] }) {}
+            end
+
+            it "resolves all datasets that have the given values in their metadata" do
+                datasets = @datastore.find_all("a" => %w[values])
+                assert_equal [@ds_e, @ds_f].map(&:dataset_path).to_set,
+                             datasets.map(&:dataset_path).to_set
+            end
+
+            it "requires all the given values to match (AND)" do
+                datasets = @datastore.find_all("a" => %w[some values])
+                assert_equal [@ds_e.dataset_path],
+                             datasets.map(&:dataset_path).to_a
+            end
+        end
+
+        describe "#find" do
+            it "returns a single value returned by find_all" do
+                flexmock(@datastore).should_receive(:find_all).with(query = flexmock)
+                                    .and_return([result = flexmock])
+                assert_equal result, @datastore.find(query)
+            end
+
+            it "returns nil if find_all returns an empty array" do
+                flexmock(@datastore).should_receive(:find_all).with(query = flexmock)
+                                    .and_return([])
+                assert_nil @datastore.find(query)
+            end
+
+            it "raises if more than one dataset matches" do
+                flexmock(@datastore).should_receive(:find_all).with(query = flexmock)
+                                    .and_return([1, 2, 3])
+                assert_raises(ArgumentError) do
+                    @datastore.find(query)
+                end
+            end
+        end
     end
 end

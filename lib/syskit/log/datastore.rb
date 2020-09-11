@@ -118,6 +118,27 @@ module Syskit::Log
             datastore_path + "cache" + digest
         end
 
+        # Enumerate the datasets matching this query
+        def find(metadata)
+            matches = find_all(metadata)
+            if matches.size > 1
+                raise ArgumentError,
+                      "more than one matching dataset, use #find_all instead"
+            else
+                matches.first
+            end
+        end
+
+        # Enumerate the datasets matching this query
+        def find_all(metadata)
+            each_dataset.find_all do |ds|
+                metadata.all? do |key, values|
+                    values = Array(values).to_set
+                    (values - (ds.metadata[key] || Set.new)).empty?
+                end
+            end
+        end
+
         # Get an existing dataset
         def get(digest)
             unless has?(digest)
