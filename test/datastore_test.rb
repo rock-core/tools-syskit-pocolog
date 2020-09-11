@@ -9,10 +9,35 @@ module Syskit::Log
             @datastore_path = root_path + 'datastore'
             datastore_path.mkpath
             @datastore = Datastore.new(datastore_path)
+
+            @__syskit_log_store_envvar = ENV.delete("SYSKIT_LOG_STORE")
         end
+
         after do
+            if @__syskit_log_store_envvar
+                ENV["SYSKIT_LOG_STORE"] = @__syskit_log_store_envvar
+            else
+                ENV.delete("SYSKIT_LOG_STORE")
+            end
             root_path.rmtree
         end
+
+        describe ".default" do
+            it "returns the default datastore if one is defined" do
+                ENV["SYSKIT_LOG_STORE"] = @datastore_path.to_s
+                assert Datastore.default_defined?
+                datastore = Datastore.default
+                assert_equal @datastore_path, datastore.datastore_path
+            end
+
+            it "raises if there is no default" do
+                refute Datastore.default_defined?
+                assert_raises(ArgumentError) do
+                    Datastore.default
+                end
+            end
+        end
+
         describe "#in_incoming" do
             it "creates an incoming directory in the datastore and yields it" do
                 datastore.in_incoming do |core_path, cache_path|

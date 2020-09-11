@@ -18,6 +18,25 @@ module Syskit::Log
             @datastore_path = datastore_path.realpath
         end
 
+        # Whether there is a default datastore defined
+        #
+        # The default datastore is defined through the SYSKIT_LOG_STORE
+        # environment variable
+        def self.default_defined?
+            ENV["SYSKIT_LOG_STORE"]
+        end
+
+        # The default datastore
+        #
+        # The default datastore is defined through the SYSKIT_LOG_STORE
+        # environment variable. This raises if the environment variable is
+        # not defined
+        def self.default
+            raise ArgumentError, "SYSKIT_LOG_STORE is not set" unless default_defined?
+
+            new(Pathname(ENV["SYSKIT_LOG_STORE"]))
+        end
+
         # Setup a directory structure for the given path to be a valid datastore
         def self.create(datastore_path)
             datastore_path.mkpath
