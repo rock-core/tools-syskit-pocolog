@@ -123,42 +123,17 @@ module Syskit
                 @interval[1] += offset
             end
 
-            # Define a data stream
-            #
-            # The stream samples within the {#interval} time interval will be
-            # available under the `_samples` suffix
-            def stream_define(name, stream)
-                @streams[name] = stream
-            end
-
             # Convert fields of a data stream into a Daru frame
-            def to_daru_frame(name)
-                stream = @streams.fetch(name)
-                builder = Daru::FrameBuilder.new(stream.type, stream_samples(name))
+            def to_daru_frame(stream)
+                samples = samples_of(stream)
+                builder = Daru::FrameBuilder.new(stream.type)
                 yield(builder)
-                builder.to_daru_frame
+                builder.to_daru_frame(@interval[0], samples)
             end
 
-            # Return a sample enumerator for the given stream, matching the
-            # configured sample interval
-            def stream_samples(name)
-                unless (samples = __find_samples_by_name(name))
-                    raise ArgumentError, "no stream defined with name '#{name}'"
-                end
-
-                samples
-            end
-
-            # @api private
-            #
-            # Return the samples of an existing stream
-            #
-            # The sample enumerator is narrowed to the given sample interval
-            #
-            # @param [String] the name as given to {#stream_define}
-            # @return [nil,Pocolog::SampleEnumerator]
-            def __find_samples_by_name(name)
-                return unless (stream = @streams[name])
+            # Resolve a sample enumerator from a stream object
+            def samples_of(stream)
+                return stream if stream.kind_of?(Pocolog::SampleEnumerator)
 
                 samples = stream.samples
                 return samples unless @interval
@@ -168,31 +143,19 @@ module Syskit
 
             # @api private
             #
-            # Find a stream defined with {#stream_define}
-            #
-            # @param [String] the name as given to {#stream_define}
-            # @return [nil,LazyDataStream]
-            def __find_stream_by_name(name)
-                @streams[name]
-            end
-
-            # @api private
-            #
             # Find the streams originating from the same task, by its deployed name
             #
             # @return [nil,TaskStreams]
-            def __find_task_by_name(neme)
-                return unless @datastore
+            def __find_task_by_name(name)
+                return unless @dataset
 
-                @datastore.streams.find_task_by_name(name)
+                @dataset.streams.find_task_by_name(name)
             end
 
             def respond_to_missing?(m, include_private = false)
                 MetaRuby::DSLs.has_through_method_missing?(
                     self, m,
-                    '_task' => '__find_task_by_name',
-                    '_stream' => '__find_stream_by_name',
-                    '_samples' => '__find_stream_by_name'
+                    "_task" => "__find_task_by_name"
                 ) || super
             end
 
@@ -200,12 +163,9 @@ module Syskit
             def method_missing(m, *args, &block)
                 MetaRuby::DSLs.find_through_method_missing(
                     self, m, args,
-                    '_task' => '__find_task_by_name',
-                    '_stream' => '__find_stream_by_name',
-                    '_samples' => '__find_samples_by_name'
+                    "_task" => "__find_task_by_name"
                 ) || super
             end
-
         end
     end
 end

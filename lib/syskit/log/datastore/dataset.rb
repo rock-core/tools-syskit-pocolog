@@ -550,6 +550,14 @@ module Syskit::Log
                 (@lazy_data_streams ||= read_lazy_data_streams).each(&block)
             end
 
+            # Return an object that allows to query the set of data streams in
+            # this dataset
+            #
+            # @return [Streams]
+            def streams
+                Streams.new(each_pocolog_lazy_stream.to_a)
+            end
+
             # Enumerate the streams per task
             #
             # @yieldparam [TaskStreams]
@@ -561,23 +569,13 @@ module Syskit::Log
                 raise_on_missing_task_models: false,
                 loader: Roby.app.default_loader, &block
             )
-                unless block_given?
-                    return enum_for(
-                        __method__,
-                        load_models: load_models,
-                        skip_tasks_without_models: skip_tasks_without_models,
-                        raise_on_missing_task_models: raise_on_missing_task_models,
-                        loader: loader
-                    )
-                end
-                Streams.new(each_pocolog_lazy_stream.to_a)
-                       .each_task(
-                           load_models: load_models,
-                           skip_tasks_without_models: skip_tasks_without_models,
-                           raise_on_missing_task_models: raise_on_missing_task_models,
-                           loader: loader,
-                           &block
-                       )
+                streams.each_task(
+                    load_models: load_models,
+                    skip_tasks_without_models: skip_tasks_without_models,
+                    raise_on_missing_task_models: raise_on_missing_task_models,
+                    loader: loader,
+                    &block
+                )
             end
         end
     end
