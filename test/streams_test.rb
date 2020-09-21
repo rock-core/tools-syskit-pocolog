@@ -219,9 +219,17 @@ module Syskit::Log
             end
 
             it "ignores streams that have a malformed rock_task_model name" do
-                streams = Streams.new([s = subject.streams[0]])
-                s.metadata['rock_task_model'] = ''
-                should_warn /ignored 1 stream.*empty.*test0/
+                path = create_logfile "malformed_model.0.log" do
+                    create_logfile_stream(
+                        "/test1", metadata: {
+                            "rock_task_model" => "", "rock_task_name" => "task"
+                        }
+                    )
+                end
+
+                should_warn /removing empty metadata property.*test1/
+                streams = Streams.new
+                streams.add_file Pathname(path)
                 flexmock(app).should_receive(:using_task_library).never
                 assert_equal [], streams.each_task.to_a
             end
@@ -266,6 +274,63 @@ module Syskit::Log
                 task, other_task = subject.each_task.to_a
                 assert_equal ['/test0', '/test1'], task.streams.map(&:name)
                 assert_equal ['/other_project'], other_task.streams.map(&:name)
+            end
+        end
+
+        describe ".sanitize_metadata" do
+            it "leaves a normalized task name as-is" do
+                metadata = {
+                    "rock_task_name" => "some_task_name",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42"
+                }
+                normalized = Streams.sanitize_metadata(metadata)
+                assert_equal metadata, normalized
+            end
+            it "removes the namespace from the task name and "\
+               "saves it in rock_task_namespace" do
+                metadata = {
+                    "rock_task_name" => "some_namespace/some_task_name",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42"
+                }
+                normalized = Streams.sanitize_metadata(metadata)
+                expected = {
+                    "rock_task_name" => "some_task_name",
+                    "rock_task_namespace" => "some_namespace",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42"
+                }
+                assert_equal expected, normalized
+            end
+            it "removes a leading slash in the task name" do
+                metadata = {
+                    "rock_task_name" => "/some_task_name",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42"
+                }
+                normalized = Streams.sanitize_metadata(metadata)
+                expected = {
+                    "rock_task_name" => "some_task_name",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42"
+                }
+                assert_equal expected, normalized
+            end
+            it "deletes an empty rock_task_model entry" do
+                metadata = {
+                    "rock_task_name" => "some_task_name",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42",
+                    "rock_task_model" => ""
+                }
+                normalized = Streams.sanitize_metadata(metadata)
+                expected = {
+                    "rock_task_name" => "some_task_name",
+                    "rock_task_object_name" => "some_task_object_name",
+                    "other" => "42"
+                }
+                assert_equal expected, normalized
             end
         end
     end

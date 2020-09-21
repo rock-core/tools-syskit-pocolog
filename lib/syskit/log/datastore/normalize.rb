@@ -70,7 +70,12 @@ module Syskit::Log
                 @out_files = {}
             end
 
-            def normalize(paths, output_path: paths.first.dirname + 'normalized', index_dir: output_path, reporter: Pocolog::CLI::NullReporter.new, compute_sha256: false)
+            def normalize(
+                paths,
+                output_path: paths.first.dirname + 'normalized',
+                index_dir: output_path, reporter: Pocolog::CLI::NullReporter.new,
+                compute_sha256: false
+            )
                 output_path.mkpath
                 paths.each do |logfile_path|
                     e, out_io = normalize_logfile(logfile_path, output_path, reporter: reporter, compute_sha256: compute_sha256)
@@ -173,9 +178,9 @@ module Syskit::Log
 
                 state = NormalizationState.new([], +"", [])
 
-                while (block = in_block_stream.read_next_block_header)
+                while (block_header = in_block_stream.read_next_block_header)
                     normalize_logfile_process_block(
-                        output_path, state, block, in_block_stream.read_payload,
+                        output_path, state, block_header, in_block_stream.read_payload,
                         compute_sha256: compute_sha256
                     )
 
@@ -204,26 +209,26 @@ module Syskit::Log
             # Process a single in block and dispatch it into separate
             # normalized logfiles
             def normalize_logfile_process_block(
-                output_path, state, block, raw_payload, compute_sha256: false
+                output_path, state, block_header, raw_payload, compute_sha256: false
             )
-                stream_index = block.stream_index
+                stream_index = block_header.stream_index
 
                 # Control blocks must be saved in all generated log files
                 # (they apply to all streams). Write them to all streams
                 # seen so far, and write them when we (re)open an existing
                 # file
-                if block.kind == Pocolog::CONTROL_BLOCK
+                if block_header.kind == Pocolog::CONTROL_BLOCK
                     normalize_logfile_process_control_block(
-                        state, block.raw_data, raw_payload
+                        state, block_header.raw_data, raw_payload
                     )
-                elsif block.kind == Pocolog::STREAM_BLOCK
+                elsif block_header.kind == Pocolog::STREAM_BLOCK
                     normalize_logfile_process_stream_block(
-                        state, output_path, stream_index, block.raw_data, raw_payload,
-                        compute_sha256: compute_sha256
+                        state, output_path, stream_index, block_header.raw_data,
+                        raw_payload, compute_sha256: compute_sha256
                     )
                 else
                     normalize_logfile_process_data_block(
-                        state, stream_index, block.raw_data, raw_payload
+                        state, stream_index, block_header.raw_data, raw_payload
                     )
                 end
             end
@@ -244,8 +249,10 @@ module Syskit::Log
                 state, output_path, stream_index, raw_data, raw_payload,
                 compute_sha256: false
             )
+                stream_block = Pocolog::BlockStream::StreamBlock.parse(raw_payload)
+                stream_block = normalize_stream_definition(stream_block)
                 output = create_or_reuse_out_io(
-                    output_path, raw_data, raw_payload, state.control_blocks,
+                    output_path, raw_data, stream_block, state.control_blocks,
                     compute_sha256: compute_sha256
                 )
                 state.out_io_streams[stream_index] = output
@@ -254,6 +261,22 @@ module Syskit::Log
                 # written block so that we can validate that the two streams
                 # actually follow each other
                 state.followup_stream_time[stream_index] = output.last_data_block_time
+            end
+
+            # @api private
+            #
+            # Normalize stream definition, to avoid quirks that exist(ed) in
+            # during log generation
+            def normalize_stream_definition(stream_block)
+                metadata = stream_block.metadata.dup
+                metadata = Streams.sanitize_metadata(
+                    metadata, stream_name: stream_block.name
+                )
+                name = Streams.normalized_stream_name(metadata)
+                Pocolog::BlockStream::StreamBlock.new(
+                    name, stream_block.typename,
+                    stream_block.registry_xml, YAML.dump(metadata)
+                )
             end
 
             # @api private
@@ -274,12 +297,11 @@ module Syskit::Log
             end
 
             def create_or_reuse_out_io(
-                output_path, raw_header, raw_payload, initial_blocks,
+                output_path, raw_header, stream_info, initial_blocks,
                 compute_sha256: false
             )
-                stream_info = Pocolog::BlockStream::StreamBlock.parse(raw_payload)
-                out_file_path =
-                    output_path + (Streams.normalized_filename(stream_info) + ".0.log")
+                basename = Streams.normalized_filename(stream_info.metadata)
+                out_file_path = output_path + "#{basename}.0.log"
 
                 # Check if that's already known to us (multi-part
                 # logfile)
@@ -296,6 +318,8 @@ module Syskit::Log
                     return existing
                 end
 
+                raw_payload = stream_info.encode
+                raw_header[4, 4] = [raw_payload.size].pack("V")
                 initialize_out_file(
                     out_file_path, stream_info, raw_header, raw_payload, initial_blocks,
                     compute_sha256: compute_sha256
@@ -329,8 +353,8 @@ module Syskit::Log
                 wio.write raw_payload
                 out_files[out_file_path] = output
             rescue Exception => e # rubocop:disable Lint/RescueException
-                wio.close
-                out_file_path.unlink
+                wio&.close
+                out_file_path&.unlink
                 raise
             end
         end

@@ -103,7 +103,7 @@ module Syskit::Log
             unless empty_task_models.empty?
                 Syskit::Log.warn(
                     "ignored #{empty_task_models.size} streams that declared a "\
-                    'task model, but left it empty: '\
+                    "task model, but left it empty: "\
                     "#{empty_task_models.map(&:name).sort.join(', ')}"
                 )
             end
@@ -167,14 +167,24 @@ module Syskit::Log
             end
         end
 
-        # Returns the normalized basename for the given stream
+        # Returns the normalized file basename for the given stream
         #
         # @param [Pocolog::DataStream] stream
         # @return [String]
-        def self.normalized_filename(stream)
-            task_name   = stream.metadata['rock_task_name'].gsub(%r{^/}, '')
-            object_name = stream.metadata['rock_task_object_name']
-            (task_name + '::' + object_name).gsub('/', ':')
+        def self.normalized_filename(metadata)
+            task_name   = metadata["rock_task_name"].gsub(%r{^/}, "")
+            object_name = metadata["rock_task_object_name"]
+            (task_name + "::" + object_name).gsub("/", ":")
+        end
+
+        # Returns the normalized stream name for the given stream
+        #
+        # @param [Pocolog::DataStream] stream
+        # @return [String]
+        def self.normalized_stream_name(metadata)
+            task_name   = metadata["rock_task_name"].gsub(%r{^/}, "")
+            object_name = metadata["rock_task_object_name"]
+            "#{task_name}.#{object_name}"
         end
 
         # Open a list of pocolog files that belong as a group
@@ -189,18 +199,43 @@ module Syskit::Log
             end
         end
 
-        def sanitize_metadata(stream)
-            if (model = stream.metadata['rock_task_model']) && model.empty?
+        # Modify a stream metadata to remove quirks that exist(ed) during log
+        # generation
+        #
+        # @param [Hash] metadata
+        def self.sanitize_metadata(metadata, stream_name: nil)
+            metadata = metadata.dup
+            if (model = metadata["rock_task_model"]) && model.empty?
                 Syskit::Log.warn(
-                    'removing empty metadata property "rock_task_model" '\
-                    "from #{stream.name}"
+                    "removing empty metadata property 'rock_task_model' "\
+                    "from #{stream_name}"
                 )
-                stream.metadata.delete('rock_task_model')
+                metadata.delete("rock_task_model")
             end
 
-            return unless (task_name = stream.metadata['rock_task_name'])
+            if model.start_with?("OroGen.")
+                normalized_model = model[7..-1].gsub(".", "::")
 
-            stream.metadata['rock_task_name'] = task_name.gsub(%r{.*/}, '')
+                Syskit::Log.warn(
+                    "found Syskit-looking model name #{model}, "\
+                    "normalized to #{normalized_model}"
+                )
+                metadata["rock_task_model"] = normalized_model
+            end
+
+            return metadata unless (task_name = metadata["rock_task_name"])
+
+            # Remove leading /
+            task_name = task_name[1..-1] if task_name.start_with?("/")
+            metadata["rock_task_name"] = task_name
+
+            # Remove the namespace, store it in a separate metadata entry
+            namespace = task_name.gsub(%r{/.*}, "")
+            return metadata if namespace == task_name
+
+            metadata["rock_task_namespace"] = namespace
+            metadata["rock_task_name"] = task_name.gsub(%r{.*/}, "")
+            metadata
         end
 
         # Load the streams from a log file
@@ -212,7 +247,7 @@ module Syskit::Log
         #
         # @param [Pocolog::DataStream] s
         def add_stream(s)
-            sanitize_metadata(s)
+            s.metadata = Streams.sanitize_metadata(s.metadata, stream_name: s.name)
             streams << s
         end
 
