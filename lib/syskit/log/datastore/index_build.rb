@@ -76,10 +76,21 @@ module Syskit::Log
             # Rebuild the dataset's Roby index
             def rebuild_roby_index(force: false, reporter: Pocolog::CLI::NullReporter.new)
                 dataset.cache_path.mkpath
-                roby_log_path = dataset.dataset_path + 'roby-events.log'
-                return unless roby_log_path.exist?
+                event_logs = Syskit::Log.logfiles_in_dir(dataset.dataset_path)
+                event_logs.each do |roby_log_path|
+                    rebuild_roby_own_index(
+                        roby_log_path, force: force, reporter: reporter
+                    )
+                end
 
                 roby_index_path = dataset.cache_path + 'roby-events.idx'
+            # @api private
+            #
+            # Rebuild Roby's own index file
+            def rebuild_roby_own_index(
+                roby_log_path, force: false, reporter: Pocolog::CLI::NullReporter.new
+            )
+                roby_index_path = dataset.cache_path + roby_log_path.sub_ext(".idx")
                 needs_rebuild =
                     force ||
                     !Roby::DRoby::Logfile::Index.valid_file?(

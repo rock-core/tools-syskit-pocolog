@@ -153,6 +153,72 @@ module Syskit::Log
                     end
                 end
 
+                def import_dataset(path, reporter, datastore, metadata, merge: false)
+                    last_import_digest, last_import_time =
+                        Syskit::Log::Datastore::Import.find_import_info(path)
+                    already_imported = last_import_digest &&
+                                       datastore.has?(last_import_digest)
+                    if already_imported && !options[:force]
+                        reporter.info(
+                            "#{path} already seem to have been imported as "\
+                            "#{last_import_digest} at #{last_import_time}. Give "\
+                            "--force to import again"
+                        )
+                        return
+                    end
+
+                    paths =
+                        if merge
+                            path.glob("*").find_all(&:directory?).sort
+                        else
+                            [path]
+                        end
+
+                    datastore.in_incoming do |core_path, cache_path|
+                        importer = Syskit::Log::Datastore::Import.new(datastore)
+                        dataset = importer.normalize_dataset(
+                            paths, core_path, cache_path: cache_path,
+                                              reporter: reporter
+                        )
+                        metadata.each { |k, v| dataset.metadata_set(k, *v) }
+                        dataset.metadata_write_to_file
+                        stream_duration = dataset.each_pocolog_stream
+                                                  .map(&:duration_lg)
+                                                  .max
+                        stream_duration ||= 0
+
+                        if already_imported
+                            # --force is implied as otherwise we would have
+                            # skipped earlier
+                            reporter.info(
+                                "#{path} seem to have already been imported but --force "\
+                                "is given, overwriting"
+                            )
+                            datastore.delete(last_import_digest)
+                        end
+
+                        if stream_duration >= options[:min_duration]
+                            begin
+                                final_core_dir = importer.move_dataset_to_store(
+                                    path, dataset,
+                                    force: options[:force], reporter: reporter
+                                )
+                                puts File.basename(final_core_dir)
+                            rescue Syskit::Log::Datastore::Import::DatasetAlreadyExists
+                                reporter.info(
+                                    "#{path} already seem to have been imported as "\
+                                    "#{dataset.compute_dataset_digest}. Give "\
+                                    "--force to import again"
+                                )
+                            end
+                        else
+                            reporter.info(
+                                "#{path} lasts only %.1fs, ignored" % [stream_duration]
+                            )
+                        end
+                    end
+                end
+
                 def show_dataset_roby(pastel, store, dataset); end
 
                 # @api private
@@ -280,6 +346,8 @@ module Syskit::Log
                                  type: :array, default: []
             method_option :metadata, desc: 'metadata values as key=value pairs',
                                      type: :array, default: []
+            method_option :merge, desc: 'create a single dataset from multiple log dirs',
+                                  type: :boolean, default: false
             def import(root_path, description = nil)
                 root_path = Pathname.new(root_path).realpath
                 if options[:auto]
@@ -315,63 +383,8 @@ module Syskit::Log
                 end
 
                 paths.each do |p|
-                    reporter.title "Processing #{p}"
-
-                    last_import_digest, last_import_time =
-                        Syskit::Log::Datastore::Import.find_import_info(p)
-                    already_imported = last_import_digest &&
-                                       datastore.has?(last_import_digest)
-                    if already_imported && !options[:force]
-                        reporter.info(
-                            "#{p} already seem to have been imported as "\
-                            "#{last_import_digest} at #{last_import_time}. Give "\
-                            '--force to import again'
-                        )
-                        next
-                    end
-
-                    datastore.in_incoming do |core_path, cache_path|
-                        importer = Syskit::Log::Datastore::Import.new(datastore)
-                        dataset = importer.normalize_dataset(
-                            p, core_path, cache_path: cache_path,
-                                          reporter: reporter
-                        )
-                        metadata.each { |k, v| dataset.metadata_set(k, *v) }
-                        dataset.metadata_write_to_file
-                        stream_duration = dataset.each_pocolog_stream
-                                                 .map(&:duration_lg)
-                                                 .max
-                        stream_duration ||= 0
-
-                        if already_imported
-                            # --force is implied as otherwise we would have
-                            # skipped earlier
-                            reporter.info(
-                                "#{p} seem to have already been imported but --force "\
-                                'is given, overwriting'
-                            )
-                            datastore.delete(last_import_digest)
-                        end
-
-                        if stream_duration >= options[:min_duration]
-                            begin
-                                importer.move_dataset_to_store(
-                                    p, dataset, force: options[:force],
-                                                reporter: reporter
-                                )
-                            rescue Syskit::Log::Datastore::Import::DatasetAlreadyExists
-                                reporter.info(
-                                    "#{p} already seem to have been imported as "\
-                                    "#{dataset.compute_dataset_digest}. Give "\
-                                    '--force to import again'
-                                )
-                            end
-                        else
-                            reporter.info(
-                                "#{p} lasts only %.1fs, ignored" % [stream_duration]
-                            )
-                        end
-                    end
+                    import_dataset(p, reporter, datastore, metadata,
+                                   merge: options[:merge])
                 end
             end
 

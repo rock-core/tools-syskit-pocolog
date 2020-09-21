@@ -38,20 +38,24 @@ module Syskit::Log
                 all_files = Pathname.enum_for(:glob, dir_path + '*').to_a
                 remaining = (all_files - pocolog_files -
                              text_files - roby_files - ignored)
-                [pocolog_files, text_files, roby_files.first, remaining]
+                [pocolog_files, text_files, roby_files, remaining]
             end
 
             # Import a dataset into the store
             #
             # @param [Pathname] dir_path the input directory
             # @return [Pathname] the directory of the imported dataset in the store
-            def import(dir_path, force: false, reporter: Pocolog::CLI::NullReporter.new)
+            def import(
+                in_path, in_dataset_paths,
+                force: false, reporter: Pocolog::CLI::NullReporter.new
+            )
                 datastore.in_incoming do |core_path, cache_path|
                     dataset = normalize_dataset(
-                        dir_path, core_path, cache_path: cache_path, reporter: reporter
+                        in_dataset_paths, core_path,
+                        cache_path: cache_path, reporter: reporter
                     )
                     move_dataset_to_store(
-                        dir_path, dataset, force: force, reporter: reporter
+                        in_path, dataset, force: force, reporter: reporter
                     )
                 end
             end
@@ -110,6 +114,24 @@ module Syskit::Log
                 final_core_dir
             end
 
+            # Import Roby's info.yml information into the dataset metadata
+            def import_roby_metadata(dataset, roby_info_yml_path)
+                begin roby_info = YAML.safe_load(roby_info_yml_path.read)
+                rescue Psych::SyntaxError
+                    warn "failed to load Roby metadata from #{roby_info_yml_path}"
+                    return
+                end
+
+                roby_info_has_metadata =
+                    roby_info&.respond_to?(:to_ary) &&
+                    roby_info.first.respond_to?(:to_hash)
+                return unless roby_info_has_metadata
+
+                roby_info.first.to_hash.each do |k, v|
+                    dataset.metadata_add("roby:#{k}", v)
+                end
+            end
+
             # Normalize the contents of the source folder into a dataset folder
             # structure
             #
@@ -118,24 +140,26 @@ module Syskit::Log
             # @param [Pathname] dir_path the input directory
             # @param [Pathname] output_dir_path the output directory
             # @return [Dataset] the resulting dataset
-            def normalize_dataset(dir_path,
-                                  output_dir_path,
-                                  cache_path: output_dir_path,
-                                  reporter: CLI::NullReporter.new)
-                pocolog_files, text_files, roby_event_log, ignored_entries =
-                    prepare_import(dir_path)
+            def normalize_dataset(
+                dir_paths,
+                output_dir_path,
+                cache_path: output_dir_path,
+                reporter: CLI::NullReporter.new
+            )
+                pocolog_files, text_files, roby_event_logs, ignored_entries =
+                    dir_paths.map { |dir| prepare_import(dir) }
+                             .transpose.map(&:flatten)
 
                 reporter.info "Normalizing pocolog log files"
-                pocolog_digests = normalize_pocolog_files(
+                normalize_pocolog_files(
                     output_dir_path, pocolog_files,
                     cache_path: cache_path,
                     reporter: reporter
                 )
 
-                if roby_event_log
-                    reporter.info 'Copying the Roby event log'
-                    roby_digests = copy_roby_event_log(output_dir_path, roby_event_log)
-                else roby_digests = {}
+                reporter.info "Copying the Roby event logs"
+                roby_event_logs.each do |roby_event_log|
+                    copy_roby_event_log(output_dir_path, roby_event_log)
                 end
 
                 reporter.info "Copying #{text_files.size} text files"
@@ -146,26 +170,12 @@ module Syskit::Log
                 copy_ignored_entries(output_dir_path, ignored_entries)
 
                 dataset = Dataset.new(output_dir_path, cache: cache_path)
-                digests = pocolog_digests.merge(roby_digests)
-                metadata = digests.inject([]) do |a, (path, digest)|
-                    a << Dataset::IdentityEntry.new(path, path.size, digest.hexdigest)
-                end
+                dataset.write_dataset_identity_to_metadata_file
 
-                dataset.weak_validate_identity_metadata(metadata)
-                dataset.write_dataset_identity_to_metadata_file(metadata)
-
-                roby_info_yml_path = (dir_path + 'info.yml')
-                if roby_info_yml_path.exist?
-                    begin roby_info = YAML.safe_load(roby_info_yml_path.read)
-                    rescue Psych::SyntaxError
-                        warn "failed to load Roby metadata from #{roby_info_yml_path}"
-                    end
-
-                    roby_info_has_metadata =
-                        roby_info&.respond_to?(:to_ary) &&
-                        roby_info.first.respond_to?(:to_hash)
-                    if roby_info_has_metadata
-                        import_roby_metadata(dataset, roby_info.first.to_hash)
+                dir_paths.reverse.each do |dir_path|
+                    roby_info_yml_path = (dir_path + "info.yml")
+                    if roby_info_yml_path.exist?
+                        import_roby_metadata(dataset, roby_info_yml_path)
                     end
                 end
 
@@ -234,7 +244,9 @@ module Syskit::Log
             # @return [Hash<Pathname,Digest::SHA256>] a hash of the log file's
             #   pathname to the file's SHA256 digest
             def copy_roby_event_log(output_dir, event_log)
-                target_file = output_dir + 'roby-events.log'
+                i = 0
+                i += 1 while (target_file = output_dir + "roby-events.#{i}.log").file?
+
                 FileUtils.cp event_log, target_file
                 digest = Digest::SHA256.new
                 digest.update(event_log.read)
@@ -257,13 +269,6 @@ module Syskit::Log
                 out_ignored_dir = (output_dir + 'ignored')
                 out_ignored_dir.mkpath
                 FileUtils.cp_r paths, out_ignored_dir
-            end
-
-            # Import the metadata from Roby into the dataset's own metadata
-            def import_roby_metadata(dataset, roby_info)
-                roby_info.each do |k, v|
-                    dataset.metadata_add("roby:#{k}", v)
-                end
             end
         end
     end
