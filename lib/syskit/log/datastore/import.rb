@@ -24,16 +24,16 @@ module Syskit::Log
             # import
             def prepare_import(dir_path)
                 pocolog_files = Syskit::Log.logfiles_in_dir(dir_path)
-                text_files    = Pathname.glob(dir_path + '*.txt')
-                roby_files    = Pathname.glob(dir_path + '*-events.log')
+                text_files    = Pathname.glob(dir_path + "*.txt")
+                roby_files    = Pathname.glob(dir_path + "*-events.log")
                 if roby_files.size > 1
-                    raise ArgumentError, 'more than one Roby event log found'
+                    raise ArgumentError, "more than one Roby event log found"
                 end
 
                 ignored = pocolog_files.map do |p|
                     Pathname.new(Pocolog::Logfiles.default_index_filename(p.to_s))
                 end
-                ignored.concat(roby_files.map { |p| p.sub(/-events.log$/, '-index.log') })
+                ignored.concat(roby_files.map { |p| p.sub(/-events.log$/, "-index.log") })
 
                 all_files = Pathname.enum_for(:glob, dir_path + '*').to_a
                 remaining = (all_files - pocolog_files -
@@ -79,7 +79,7 @@ module Syskit::Log
             # @return [Pathname] the path to the new dataset in the store
             # @raise DatasetAlreadyExists if a dataset already exists with the same
             #   ID than the new one and 'force' is false
-            def move_dataset_to_store(dir_path, dataset,
+            def move_dataset_to_store(in_path, dataset,
                                       force: false,
                                       reporter: Pocolog::CLI::NullReporter.new)
                 dataset_digest = dataset.compute_dataset_digest
@@ -103,7 +103,7 @@ module Syskit::Log
                     FileUtils.mv dataset.cache_path, final_cache_dir
                 end
 
-                (dir_path + BASENAME_IMPORT_TAG).open('w') do |io|
+                (in_path + BASENAME_IMPORT_TAG).open('w') do |io|
                     YAML.dump(Hash['sha2' => dataset_digest, 'time' => Time.now], io)
                 end
 
@@ -125,7 +125,7 @@ module Syskit::Log
                 pocolog_files, text_files, roby_event_log, ignored_entries =
                     prepare_import(dir_path)
 
-                reporter.info 'Normalizing pocolog log files'
+                reporter.info "Normalizing pocolog log files"
                 pocolog_digests = normalize_pocolog_files(
                     output_dir_path, pocolog_files,
                     cache_path: cache_path,
@@ -142,7 +142,7 @@ module Syskit::Log
                 copy_text_files(output_dir_path, text_files)
 
                 reporter.info "Copying #{ignored_entries.size} remaining "\
-                              'files and folders'
+                              "files and folders"
                 copy_ignored_entries(output_dir_path, ignored_entries)
 
                 dataset = Dataset.new(output_dir_path, cache: cache_path)
@@ -184,17 +184,18 @@ module Syskit::Log
             # @return [Hash<Pathname,Digest::SHA256>] a hash of the log file's
             #   pathname to the file's SHA256 digest. The pathnames are
             #   relative to output_dir
-            def normalize_pocolog_files(output_dir, files,
-                                        reporter: CLI::NullReporter.new,
-                                        cache_path: output_dir)
+            def normalize_pocolog_files(
+                output_dir, files,
+                reporter: CLI::NullReporter.new, cache_path: output_dir
+            )
                 return {} if files.empty?
 
-                out_pocolog_dir = (output_dir + 'pocolog')
+                out_pocolog_dir = (output_dir + "pocolog")
                 out_pocolog_dir.mkpath
-                out_pocolog_cache_dir = (cache_path + 'pocolog')
+                out_pocolog_cache_dir = (cache_path + "pocolog")
                 bytes_total = files.inject(0) { |s, p| s + p.size }
                 reporter.reset_progressbar(
-                    '|:bar| :current_byte/:total_byte :eta (:byte_rate/s)',
+                    "|:bar| :current_byte/:total_byte :eta (:byte_rate/s)",
                     total: bytes_total
                 )
 

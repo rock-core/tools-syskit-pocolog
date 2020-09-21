@@ -86,18 +86,18 @@ module Syskit::Log
                         roby_log_path, roby_index_path
                     )
                 unless needs_rebuild
-                    reporter.log '  up-to-date: roby-events.log'
+                    reporter.log "  up-to-date: #{roby_log_path.basename}"
                     return
                 end
 
-                reporter.log '  rebuilding: roby-events.log'
+                reporter.log "  rebuilding: #{roby_log_path.basename}"
                 begin
                     Roby::DRoby::Logfile::Index.rebuild_file(
                         roby_log_path, roby_index_path
                     )
                 rescue Roby::DRoby::Logfile::InvalidFormatVersion
-                    reporter.warn '  roby-events.log is in an obsolete Roby log '\
-                                  'file format, skipping'
+                    reporter.warn "  #{roby_log_path.basename} is in an obsolete Roby "\
+                                  "log file format, skipping"
                 end
             end
         end

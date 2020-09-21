@@ -199,4 +199,4 @@ module Syskit::Log
     end
 end
 
-require 'syskit/log/datastore/dataset'
+require "syskit/log/datastore/dataset"

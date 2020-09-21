@@ -1,15 +1,18 @@
+# frozen_string_literal: true
+
 require "pocolog"
 require "syskit"
 
 module Syskit
+    # Toplevel module for all the log management functionality
     module Log
-        extend Logger::Root('Syskit::Log', Logger::WARN)
+        extend Logger::Root("Syskit::Log", Logger::WARN)
     end
 end
 
-require 'digest/sha2'
+require "digest/sha2"
 require "metaruby/dsls/find_through_method_missing"
-require 'pocolog/cli/null_reporter'
+require "pocolog/cli/null_reporter"
 require "syskit/log/version"
 require "syskit/log/exceptions"
 require "syskit/log/lazy_data_stream"
@@ -23,15 +26,15 @@ require "syskit/log/models/replay_task_context"
 require "syskit/log/replay_task_context"
 require "syskit/log/replay_manager"
 
-require 'syskit/log/extensions'
-require 'syskit/log/shell_interface'
-require 'syskit/log/registration_namespace'
-require 'syskit/log/plugin'
+require "syskit/log/extensions"
+require "syskit/log/shell_interface"
+require "syskit/log/registration_namespace"
+require "syskit/log/plugin"
 
-require 'syskit/log/datastore'
+require "syskit/log/datastore"
 
 module Syskit
-    module Log
+    module Log # rubocop:disable Style/Documentation
         # Returns the paths of the log files in a given directory
         #
         # The returned paths are sorted in 'pocolog' order, i.e. multi-IO files are
@@ -40,16 +43,14 @@ module Syskit
         #
         # @param [Pathname] dir_path path to the directory
         def self.logfiles_in_dir(dir_path)
-            path = Pathname.new(dir_path).realpath
+            real_path = Pathname.new(dir_path).realpath
 
-            paths = Array.new
-            Pathname.glob(path + '*.*.log') do |path|
+            paths = Pathname.enum_for(:glob, real_path + "*.*.log").map do |path|
                 basename = path.basename
-                if basename.to_s =~ /(.*)\.(\d+)\.log$/
-                    paths << [$1, Integer($2), path]
-                end
+                m = /(.*)\.(\d+)\.log$/.match(basename.to_s)
+                [m[1], Integer(m[2]), path] if m
             end
-            paths.sort.map { |_, _, path| path }
+            paths.compact.sort.map { |_, _, path| path }
         end
     end
 end

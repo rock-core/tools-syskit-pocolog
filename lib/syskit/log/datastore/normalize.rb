@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'digest/sha2'
 
 module Syskit::Log
@@ -14,7 +16,21 @@ module Syskit::Log
 
             attr_reader :out_files
 
-            Output = Struct.new :path, :wio, :stream_info, :digest, :stream_block_pos, :index_map, :last_data_block_time
+            ZERO_BYTE = [0].pack("v").freeze
+
+            Output = Struct
+                     .new(:path, :wio, :stream_info, :digest, :stream_block_pos,
+                          :index_map, :last_data_block_time) do
+                def add_data_block(rt_time, lg_time, raw_data, raw_payload)
+                    raw_data = raw_data.dup
+                    raw_data[2, 2] = ZERO_BYTE
+                    index_map << wio.tell << lg_time
+                    wio.write raw_data
+                    wio.write raw_payload
+                    self.last_data_block_time = [rt_time, lg_time]
+                end
+            end
+
 
             DigestIO = Struct.new :wio, :digest do
                 def write(string)
@@ -99,6 +115,29 @@ module Syskit::Log
                 end
             end
 
+            NormalizationState =
+                Struct
+                .new(:out_io_streams, :control_blocks, :followup_stream_time) do
+                    def validate_time_followup(stream_index, data_block_header)
+                        # Second part of the followup stream validation (see above)
+                        last_stream_time = followup_stream_time[stream_index]
+                        return unless last_stream_time
+
+                        followup_stream_time[stream_index] = nil
+                        previous_rt, previous_lg = last_stream_time
+                        if previous_rt > data_block_header.rt_time
+                            raise InvalidFollowupStream,
+                                  "found followup stream whose real time is before "\
+                                  "the stream that came before it"
+                        elsif previous_lg > data_block_header.lg_time
+                            raise InvalidFollowupStream,
+                                  "found followup stream whose logical time is "\
+                                  "before the stream that came before it"
+                        end
+                    end
+                end
+
+
             # @api private
             #
             # Normalize a single logfile
@@ -110,71 +149,35 @@ module Syskit::Log
             # @return [(nil,Array<IO>),(Exception,Array<IO>)] returns a potential
             #   exception that has been raised during processing, and the IOs that
             #   have been touched by the call.
-            def normalize_logfile(logfile_path, output_path, reporter: Pocolog::CLI::NullReporter.new, compute_sha256: false)
-                out_io_streams = Array.new
+            def normalize_logfile(
+                logfile_path, output_path,
+                reporter: Pocolog::CLI::NullReporter.new, compute_sha256: false
+            )
+                state = Struct
+                        .new(:out_io_streams, :control_blocks, :followup_stream_time)
+                        .new([], +"", [])
 
                 reporter_offset = reporter.current
                 last_progress_report = Time.now
-                zero_index = [0].pack('v')
 
                 in_io = logfile_path.open
                 in_block_stream = Pocolog::BlockStream.new(in_io)
                 begin
                     in_block_stream.read_prologue
                 rescue Pocolog::InvalidFile
-                    reporter.warn "#{logfile_path.basename} does not seem to be a valid pocolog file, skipping"
+                    reporter.warn "#{logfile_path.basename} does not seem to be "\
+                                  "a valid pocolog file, skipping"
                     reporter.current = in_io.size + reporter_offset
-                    return nil, Array.new
+                    return nil, []
                 end
 
-                control_blocks = String.new
-                followup_stream_time = Array.new
-                in_streams = Array.new
-                while block = in_block_stream.read_next_block_header
-                    stream_index = block.stream_index
-                    raw_payload  = in_block_stream.read_payload
-                    raw_block = block.raw_data + raw_payload
+                state = NormalizationState.new([], +"", [])
 
-                    # Control blocks must be saved in all generated log files
-                    # (they apply to all streams). Write them to all streams
-                    # seen so far, and write them when we (re)open an existing
-                    # file
-                    if block.kind == Pocolog::CONTROL_BLOCK
-                        control_blocks << raw_block
-                        out_io_streams.each do |wio|
-                            wio.write raw_block
-                        end
-                        next
-                    end
-
-                    if block.kind == Pocolog::STREAM_BLOCK
-                        out_io_streams[stream_index] = output =
-                            create_or_reuse_out_io(output_path, block.raw_data, raw_payload, control_blocks, compute_sha256: compute_sha256)
-
-                        # If we're reusing a stream, save the time of the last
-                        # written block so that we can validate that the two streams
-                        # actually follow each other
-                        followup_stream_time[stream_index] = output.last_data_block_time
-                    else
-                        output = out_io_streams[stream_index]
-                        data_block_header = Pocolog::BlockStream::DataBlockHeader.parse(raw_payload)
-
-                        # Second part of the followup stream validation (see above)
-                        if last_stream_time = followup_stream_time[stream_index]
-                            previous_rt, previous_lg = last_stream_time
-                            if previous_rt > data_block_header.rt_time
-                                raise InvalidFollowupStream, "found followup stream whose real time is before the stream that came before it"
-                            elsif previous_lg > data_block_header.lg_time
-                                raise InvalidFollowupStream, "found followup stream whose logical time is before the stream that came before it"
-                            end
-                        end
-
-                        raw_block[2, 2] = zero_index
-                        wio = output.wio
-                        output.index_map << wio.tell << data_block_header.lg_time
-                        wio.write raw_block
-                        output.last_data_block_time = [data_block_header.rt_time, data_block_header.lg_time]
-                    end
+                while (block = in_block_stream.read_next_block_header)
+                    normalize_logfile_process_block(
+                        output_path, state, block, in_block_stream.read_payload,
+                        compute_sha256: compute_sha256
+                    )
 
                     now = Time.now
                     if (now - last_progress_report) > 0.1
@@ -182,57 +185,153 @@ module Syskit::Log
                         last_progress_report = now
                     end
                 end
-                return nil, out_io_streams
+                [nil, state.out_io_streams]
             rescue Pocolog::InvalidBlockFound => e
-                reporter.warn "#{logfile_path.basename} looks truncated or contains garbage (#{e.message}), stopping processing but keeping the samples processed so far"
+                reporter.warn "#{logfile_path.basename} looks truncated or contains "\
+                              "garbage (#{e.message}), stopping processing but keeping "\
+                              "the samples processed so far"
                 reporter.current = in_io.size + reporter_offset
-                return nil, out_io_streams
-
-            rescue Exception => e
-                return e, (out_io_streams || Array.new)
+                [nil, state.out_io_streams]
+            rescue StandardError => e
+                [e, (state.out_io_streams || [])]
             ensure
-                out_io_streams.each { |output| output.wio.flush }
-                in_block_stream.close if in_block_stream
+                state.out_io_streams.each { |output| output.wio.flush }
+                in_block_stream&.close
             end
 
-            def create_or_reuse_out_io(output_path, raw_header, raw_payload, initial_blocks, compute_sha256: false)
+            # @api private
+            #
+            # Process a single in block and dispatch it into separate
+            # normalized logfiles
+            def normalize_logfile_process_block(
+                output_path, state, block, raw_payload, compute_sha256: false
+            )
+                stream_index = block.stream_index
+
+                # Control blocks must be saved in all generated log files
+                # (they apply to all streams). Write them to all streams
+                # seen so far, and write them when we (re)open an existing
+                # file
+                if block.kind == Pocolog::CONTROL_BLOCK
+                    normalize_logfile_process_control_block(
+                        state, block.raw_data, raw_payload
+                    )
+                elsif block.kind == Pocolog::STREAM_BLOCK
+                    normalize_logfile_process_stream_block(
+                        state, output_path, stream_index, block.raw_data, raw_payload,
+                        compute_sha256: compute_sha256
+                    )
+                else
+                    normalize_logfile_process_data_block(
+                        state, stream_index, block.raw_data, raw_payload
+                    )
+                end
+            end
+
+            # @api private
+            #
+            # Process a single control block in {#normalize_logfile_process_block}
+            def normalize_logfile_process_control_block(state, raw_block)
+                state.control_blocks << raw_block
+                state.out_io_streams.each { |wio| wio.write raw_block }
+            end
+
+            # @api private
+            #
+            # Process a single stream definition block in
+            # {#normalize_logfile_process_block}
+            def normalize_logfile_process_stream_block(
+                state, output_path, stream_index, raw_data, raw_payload,
+                compute_sha256: false
+            )
+                output = create_or_reuse_out_io(
+                    output_path, raw_data, raw_payload, state.control_blocks,
+                    compute_sha256: compute_sha256
+                )
+                state.out_io_streams[stream_index] = output
+
+                # If we're reusing a stream, save the time of the last
+                # written block so that we can validate that the two streams
+                # actually follow each other
+                state.followup_stream_time[stream_index] = output.last_data_block_time
+            end
+
+            # @api private
+            #
+            # Process a single data block in {#normalize_logfile_process_block}
+            def normalize_logfile_process_data_block(
+                state, stream_index, raw_data, raw_payload
+            )
+                data_block_header =
+                    Pocolog::BlockStream::DataBlockHeader.parse(raw_payload)
+                state.validate_time_followup(stream_index, data_block_header)
+
+                output = state.out_io_streams[stream_index]
+                output.add_data_block(
+                    data_block_header.rt_time, data_block_header.lg_time,
+                    raw_data, raw_payload
+                )
+            end
+
+            def create_or_reuse_out_io(
+                output_path, raw_header, raw_payload, initial_blocks,
+                compute_sha256: false
+            )
                 stream_info = Pocolog::BlockStream::StreamBlock.parse(raw_payload)
-                out_file_path = output_path + (Streams.normalized_filename(stream_info) + ".0.log")
+                out_file_path =
+                    output_path + (Streams.normalized_filename(stream_info) + ".0.log")
 
                 # Check if that's already known to us (multi-part
                 # logfile)
-                existing = out_files[out_file_path]
-                if existing
+                if (existing = out_files[out_file_path])
                     # This is a file we've already seen, reuse its info
                     # and do some consistency checks
                     if existing.stream_info.type != stream_info.type
-                        raise InvalidFollowupStream, "multi-IO stream #{stream_info.name} is not consistent"
+                        raise InvalidFollowupStream,
+                              "multi-IO stream #{stream_info.name} is not consistent: "\
+                              "type mismatch"
                     end
-                    existing
-                else
-                    wio = out_file_path.open('w+')
-
-                    begin
-                        Pocolog::Format::Current.write_prologue(wio)
-                        if compute_sha256
-                            digest = Digest::SHA256.new
-                            wio = DigestIO.new(wio, digest)
-                        end
-                        output = Output.new(out_file_path, wio, stream_info, digest, nil, Array.new, nil)
-
-                        raw_header[2, 2] = [0].pack("v")
-                        wio.write initial_blocks
-                        output.stream_block_pos = wio.tell
-                        wio.write raw_header
-                        wio.write raw_payload
-                        out_files[out_file_path] = output
-                    rescue Exception => e
-                        wio.close
-                        out_file_path.unlink
-                        raise
-                    end
-                    output
+                    # Note: normalize_logfile is checking that the files follow
+                    # each other
+                    return existing
                 end
+
+                initialize_out_file(
+                    out_file_path, stream_info, raw_header, raw_payload, initial_blocks,
+                    compute_sha256: compute_sha256
+                )
+            end
+
+            # @api private
+            #
+            # Initialize an output file suitable for {#normalize_logfile}
+            #
+            # @return [Output]
+            def initialize_out_file(
+                out_file_path, stream_info, raw_header, raw_payload, initial_blocks,
+                compute_sha256: false
+            )
+                wio = out_file_path.open("w+")
+
+                Pocolog::Format::Current.write_prologue(wio)
+                if compute_sha256
+                    digest = Digest::SHA256.new
+                    wio = DigestIO.new(wio, digest)
+                end
+                output = Output.new(
+                    out_file_path, wio, stream_info, digest, nil, [], nil
+                )
+
+                raw_header[2, 2] = [0].pack("v")
+                wio.write initial_blocks
+                output.stream_block_pos = wio.tell
+                wio.write raw_header
+                wio.write raw_payload
+                out_files[out_file_path] = output
+            rescue Exception => e # rubocop:disable Lint/RescueException
+                wio.close
+                out_file_path.unlink
+                raise
             end
         end
     end
