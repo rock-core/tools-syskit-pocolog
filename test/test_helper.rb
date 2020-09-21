@@ -73,6 +73,10 @@ module Syskit::Log
             end
             return logfile_path
         end
+
+        def roby_log_path(name)
+            Pathname(__dir__) + "roby-logs" + "#{name}-events.log"
+        end
     end
 end
 Minitest::Test.include Syskit::Log::Test

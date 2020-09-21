@@ -33,6 +33,12 @@ require "syskit/log/plugin"
 
 require "syskit/log/datastore"
 
+require "rom-sql"
+require "syskit/log/roby_sql_index/entities"
+require "syskit/log/roby_sql_index/definitions"
+require "syskit/log/roby_sql_index/index"
+require "syskit/log/roby_sql_index/accessors"
+
 module Syskit
     module Log # rubocop:disable Style/Documentation
         # Returns the paths of the log files in a given directory

@@ -558,6 +558,20 @@ module Syskit::Log
                 Streams.new(each_pocolog_lazy_stream.to_a)
             end
 
+            # Path to the Roby SQL index
+            #
+            # @return [Pathname]
+            def roby_sql_index_path
+                cache_path + "roby.sql"
+            end
+
+            # The Roby SQL index
+            #
+            # @return [RobySQLIndex]
+            def roby_sql_index
+                RobySQLIndex::Index.open(roby_sql_index_path)
+            end
+
             # Enumerate the streams per task
             #
             # @yieldparam [TaskStreams]

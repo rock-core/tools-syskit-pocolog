@@ -5,6 +5,8 @@
     <license>GPL v2 or later</license>
 
     <depend package="tools/syskit" />
+    <depend package="rom-sql" />
+    <depend package="ruby-sqlite3" />
     <depend_optional package="daru" />
 
     <test_depend package="minitest" />

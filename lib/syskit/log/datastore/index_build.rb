@@ -83,7 +83,9 @@ module Syskit::Log
                     )
                 end
 
-                roby_index_path = dataset.cache_path + 'roby-events.idx'
+                rebuild_roby_sql_index(event_logs, force: force, reporter: reporter)
+            end
+
             # @api private
             #
             # Rebuild Roby's own index file
@@ -110,6 +112,23 @@ module Syskit::Log
                     reporter.warn "  #{roby_log_path.basename} is in an obsolete Roby "\
                                   "log file format, skipping"
                 end
+            end
+
+            # @api private
+            #
+            # Rebuild the Roby SQL index
+            def rebuild_roby_sql_index(
+                roby_log_paths, force: false, reporter: Pocolog::CLI::NullReporter.new
+            )
+                roby_index_path = dataset.cache_path + "roby.sql"
+                if roby_index_path.exist?
+                    return unless force
+
+                    roby_index_path.unlink
+                end
+
+                index = RobySQLIndex::Index.create(roby_index_path)
+                roby_log_paths.each { |p| index.add_roby_log(p, reporter: reporter) }
             end
         end
     end
