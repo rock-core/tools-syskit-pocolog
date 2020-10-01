@@ -126,6 +126,7 @@ module Syskit
             def interval_reset(reset_zero: true)
                 @interval = @base_interval.dup
                 @interval_zero_time = @interval[0] if reset_zero
+                @interval
             end
 
             # The start of the interval
@@ -151,6 +152,7 @@ module Syskit
             # @param [Float] offset
             def interval_shift_start(offset)
                 @interval[0] += offset
+                @interval
             end
 
             # Set the interval end to that many seconds after the current start
@@ -158,6 +160,7 @@ module Syskit
             # @param [Float] offset
             def interval_shift_end(offset)
                 @interval[1] = @interval[0] + offset
+                @interval
             end
 
             # Convert fields of a data stream into a Daru frame
