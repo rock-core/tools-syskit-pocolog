@@ -178,6 +178,53 @@ module Syskit
                 samples.from(@interval[0]).to(@interval[1])
             end
 
+            def roby
+                RobySQLIndex::Accessors::Root.new(dataset.roby_sql_index)
+            end
+
+            # Select the interval before a given event
+            #
+            # @param [RobySQLIndex::Accessors::Event] accessor
+            def around_event(accessor, before: 60, after: 60, zero: true)
+                event = __select_emitted_event(accessor)
+
+                interval_select event.time - before, event.time + after
+                interval_select_zero_time event.time if zero
+            end
+
+            # @api private
+            #
+            # Selects a single emitted event from an event accessor
+            def __select_emitted_event(accessor)
+                return accessor if accessor.respond_to?(:time)
+
+                emissions = accessor.each_emission.to_a
+                if emissions.empty?
+                    raise ArgumentError,
+                          "found no emissions for #{event}"
+                elsif emissions.size > 1
+                    __emitted_event_select(emissions)
+                else
+                    emissions.first
+                end
+            end
+
+            # @api private
+            #
+            # Spawn a form to select an event emission among candidates
+            def __emitted_event_select(candidates)
+                candidates = candidates.each_with_object({}) do |event, h|
+                    format = "#{event.full_name} #{event.time}"
+                    h[format] = event
+                end
+
+                result = IRuby.form do
+                    radio(:selected_event, *candidates.keys)
+                    button
+                end
+                candidates.fetch(result[:selected_event])
+            end
+
             # @api private
             #
             # Find the streams originating from the same task, by its deployed name
