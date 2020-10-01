@@ -103,24 +103,61 @@ module Syskit
                 "#{description} - #{metadata}"
             end
 
-            # Select the time interval that will be processed using the start
-            # and end time of a stream
-            def interval_select_from_stream(stream)
-                @interval = stream.interval_lg
+            # Select the time interval that will be processed
+            def interval_select(start_time, end_time, reset_zero: true)
+                @base_interval = [start_time, end_time]
+                interval_reset(reset_zero: reset_zero)
             end
 
-            # Shift the interval start by that many seconds (fractional)
+            # Select the time interval that will be processed using the start
+            # and end time of a stream
+            def interval_select_from_stream(stream, reset_zero: true)
+                @base_interval = stream.interval_lg
+                interval_reset(reset_zero: reset_zero)
+            end
+
+            # Pick the zero time
+            def interval_select_zero_time(time)
+                @interval_zero_time = time
+            end
+
+            # Reset the interval to the last interval selected by
+            # {#interval_select_from_stream}
+            def interval_reset(reset_zero: true)
+                @interval = @base_interval.dup
+                @interval_zero_time = @interval[0] if reset_zero
+            end
+
+            # The start of the interval
+            #
+            # @return [Time,nil]
+            def interval_start
+                @interval[0]
+            end
+
+            # The end of the interval
+            #
+            # @return [Time,nil]
+            def interval_end
+                @interval[1]
+            end
+
+            # The zero time
+            attr_reader :interval_zero_time
+
+            # Shift the interval start by that many seconds (fractional),
+            # starting at the start of the main selected interval
             #
             # @param [Float] offset
             def interval_shift_start(offset)
                 @interval[0] += offset
             end
 
-            # Shift the interval start by that many seconds (fractional)
+            # Set the interval end to that many seconds after the current start
             #
             # @param [Float] offset
             def interval_shift_end(offset)
-                @interval[1] += offset
+                @interval[1] = @interval[0] + offset
             end
 
             # Convert fields of a data stream into a Daru frame
@@ -128,7 +165,7 @@ module Syskit
                 samples = samples_of(stream)
                 builder = Daru::FrameBuilder.new(stream.type)
                 yield(builder)
-                builder.to_daru_frame(@interval[0], samples)
+                builder.to_daru_frame(@interval_zero_time, samples)
             end
 
             # Resolve a sample enumerator from a stream object
