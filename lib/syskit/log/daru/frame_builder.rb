@@ -17,6 +17,11 @@ module Syskit
                     guess_time_field if @type <= Typelib::CompoundType
                 end
 
+                # @api private
+                #
+                # Guess the field that should be used for the frame's index
+                #
+                # It pickes the first /base/Time field
                 def guess_time_field
                     time_field = @type
                                  .each_field
@@ -26,16 +31,34 @@ module Syskit
                     time { |b| b.__send__(time_field[0]).microseconds }
                 end
 
+                # Select the field that should be used as an index in the frame
+                #
+                # If a "/base/Time" field can be found, it is automatically used
                 def time(&block)
                     @time_field = resolve_field(&block)
                 end
 
+                # Remove the automatically guessed time field
+                def no_time
+                    @time_field = nil
+                end
+
+                # Extract a field as a column in the resulting frame
+                #
+                # @param [String,nil] the column name. If it is not given, the column
+                #    name is generated from the extracted fields (see below).
+                # @yieldparam [PathBuilder] an object that allows to extract specific
+                #    fields and/or apply transformations before the value gets
+                #    stored in the frame
                 def add(name = nil, &block)
+                    raise ArgumentError, "a block is required" unless block_given?
+
                     resolved = resolve_field(&block)
                     resolved.name = name if name
                     @vector_fields << resolved
                 end
 
+                # @api private
                 ResolvedField = Struct.new :name, :path, :transform do
                     def resolve(value)
                         v = path.resolve(value).first.to_ruby
@@ -45,6 +68,11 @@ module Syskit
 
                 class InvalidDataType < ArgumentError; end
 
+                # @api private
+                #
+                # Helper that resolves a field from the block given to {#add} and {#time}
+                #
+                # @return [ResolvedField]
                 def resolve_field
                     builder = yield(PathBuilder.new(@type))
                     unless builder.__terminal?
@@ -55,19 +83,29 @@ module Syskit
                     ResolvedField.new(builder.__name, builder.__path, builder.__transform)
                 end
 
-                def to_daru_frame(start_time, samples)
+                # Convert the registered fields into a Daru frame
+                #
+                # @param [Time] center_time the time that should be used as
+                #   zero in the frame index
+                # @param [#raw_each] samples the object that will enumerate samples
+                #   It must yield [realtime, logical_time, sample] the way
+                #   Pocolog::SampleEnumerator does
+                def to_daru_frame(center_time, samples)
                     if @vector_fields.empty?
                         raise ArgumentError, "no vector fields defined with #add"
                     end
 
                     if @time_field
-                        to_daru_frame_with_time(start_time, samples)
+                        to_daru_frame_with_time(center_time, samples)
                     else
-                        to_daru_frame_without_time(start_time, samples)
+                        to_daru_frame_without_time(center_time, samples)
                     end
                 end
 
-                def to_daru_frame_with_time(start_time, samples)
+                # @api private
+                #
+                # Implementation of {#to_daru_frame} if a time field has been selected
+                def to_daru_frame_with_time(center_time, samples)
                     data = [[@time_field, []]] + @vector_fields.map { |p| [p, []] }
                     samples.raw_each do |_, _, sample|
                         data.each do |field, path_data|
@@ -76,17 +114,28 @@ module Syskit
                     end
 
                     time = data.shift[1]
-                    start_time_us = start_time.tv_sec * 1_000_000 + start_time.tv_usec
-                    time.map! { |v| (v - start_time_us) / 1_000_000.0 }
+                    shift_time_microseconds(time, center_time)
 
                     create_daru_frame(time, data)
                 end
 
-                def to_daru_frame_without_time(start_time, samples)
+                # @api private
+                #
+                # Apply the center time to an array of times expressed in microseconds
+                def shift_time_microseconds(time, center_time)
+                    start_time_us = center_time.tv_sec * 1_000_000 + center_time.tv_usec
+                    time.map! { |v| (v - start_time_us) / 1_000_000.0 }
+                end
+
+                # @api private
+                #
+                # Implementation of {#to_daru_frame} when there is no time
+                # field, in which case the sample's logical time is used
+                def to_daru_frame_without_time(center_time, samples)
                     time = []
                     data = @vector_fields.map { |p| [p, []] }
                     samples.raw_each do |_, lg, sample|
-                        time << lg - start_time
+                        time << lg - center_time
                         data.each do |field, path_data|
                             path_data << field.resolve(sample)
                         end
@@ -95,12 +144,17 @@ module Syskit
                     create_daru_frame(time, data)
                 end
 
+                # @api private
+                #
+                # Create the Daru frame from the index and vectors
+                #
+                # @return [Daru::DataFrame]
                 def create_daru_frame(time, vectors)
                     vectors = vectors.each_with_object({}) do |(field, path_data), h|
                         h[field.name] = path_data
                     end
 
-                    ::Daru::DataFrame.new(vectors, index: time, dtype: :gsl)
+                    ::Daru::DataFrame.new(vectors, index: time)
                 end
             end
         end
