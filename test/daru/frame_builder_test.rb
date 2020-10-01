@@ -13,6 +13,11 @@ module Syskit
                     @base_time_t = @registry.create_compound "/base/Time" do |c|
                         c.microseconds = "/uint64_t"
                     end
+
+                    @compound_t = @registry.create_compound "/Compound" do |c|
+                        c.time = "/base/Time"
+                        c.value = "/uint64_t"
+                    end
                 end
 
                 it "guesses the time field if the type is a compound and "\
@@ -41,20 +46,51 @@ module Syskit
                     assert_nil builder.time_field
                 end
 
-                it "applies the transform block if one is defined" do
-                    compound_t = @registry.create_compound "/C" do |c|
-                        c.time = "/base/Time"
-                        c.value = "/uint64_t"
+                it "extracts the data and fills the column with it" do
+                    samples = mock_samples do |i|
+                        @compound_t.new(
+                            time: { microseconds: i * 1_000_000 + 3 },
+                            value: i
+                        )
                     end
 
+                    builder = FrameBuilder.new(@compound_t)
+                    builder.add(&:value)
+
+                    start_time = Time.at(0, 3)
+                    frame = builder.to_daru_frame(start_time, samples)
+
+                    assert_equal (1..10).to_a, frame.index.to_a
+                    assert_equal (1..10).to_a, frame[".value"].to_a
+                end
+
+                it "allows to override the column name" do
                     samples = mock_samples do |i|
-                        compound_t.new(
+                        @compound_t.new(
+                            time: { microseconds: i * 1_000_000 + 3 },
+                            value: i
+                        )
+                    end
+
+                    builder = FrameBuilder.new(@compound_t)
+                    builder.add("name", &:value)
+
+                    start_time = Time.at(0, 3)
+                    frame = builder.to_daru_frame(start_time, samples)
+
+                    assert_equal (1..10).to_a, frame.index.to_a
+                    assert_equal (1..10).to_a, frame["name"].to_a
+                end
+
+                it "applies the transform block if one is defined" do
+                    samples = mock_samples do |i|
+                        @compound_t.new(
                             time: { microseconds: i * 1_000_000 + 3 },
                             value: i * 2
                         )
                     end
 
-                    builder = FrameBuilder.new(compound_t)
+                    builder = FrameBuilder.new(@compound_t)
                     builder.add { |b| b.value.transform { |i| i * 2 } }
 
                     start_time = Time.at(0, 3)
@@ -65,19 +101,14 @@ module Syskit
                 end
 
                 it "builds a frame using a defined time field" do
-                    compound_t = @registry.create_compound "/C" do |c|
-                        c.time = "/base/Time"
-                        c.value = "/uint64_t"
-                    end
-
                     samples = mock_samples do |i|
-                        compound_t.new(
+                        @compound_t.new(
                             time: { microseconds: i * 1_000_000 + 3 },
                             value: i * 2
                         )
                     end
 
-                    builder = FrameBuilder.new(compound_t)
+                    builder = FrameBuilder.new(@compound_t)
                     builder.add(&:value)
 
                     start_time = Time.at(0, 3)
