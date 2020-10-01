@@ -43,6 +43,11 @@ module Syskit
                     @time_field = nil
                 end
 
+                # Do not use time as index
+                def no_index
+                    @no_index = true
+                end
+
                 # Extract a field as a column in the resulting frame
                 #
                 # @param [String,nil] the column name. If it is not given, the column
@@ -91,10 +96,6 @@ module Syskit
                 #   It must yield [realtime, logical_time, sample] the way
                 #   Pocolog::SampleEnumerator does
                 def to_daru_frame(center_time, samples)
-                    if @vector_fields.empty?
-                        raise ArgumentError, "no vector fields defined with #add"
-                    end
-
                     if @time_field
                         to_daru_frame_with_time(center_time, samples)
                     else
@@ -154,7 +155,12 @@ module Syskit
                         h[field.name] = path_data
                     end
 
-                    ::Daru::DataFrame.new(vectors, index: time)
+                    if @no_index
+                        vectors["time"] = time
+                        ::Daru::DataFrame.new(vectors)
+                    else
+                        ::Daru::DataFrame.new(vectors, index: time)
+                    end
                 end
             end
         end
