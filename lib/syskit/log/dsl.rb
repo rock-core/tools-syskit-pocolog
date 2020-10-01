@@ -253,6 +253,16 @@ module Syskit
                     "_task" => "__find_task_by_name"
                 ) || super
             end
+
+            # Generating timing statistics of the given stream
+            def time_vector_of(stream, lg_time: false, &block)
+                frame = to_daru_frame(stream) do |df|
+                    df.no_time if lg_time
+                    df.time(&block) if block
+                    df.no_index
+                end
+                frame["time"]
+            end
         end
     end
 end

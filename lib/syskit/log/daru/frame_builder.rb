@@ -17,21 +17,38 @@ module Syskit
                     guess_time_field if @type <= Typelib::CompoundType
                 end
 
+                # Return the field that should be used as a time
+                # index for samples of the given type
+                #
+                # @return [(String,Typelib::Type),nil] the field name and type,
+                #    or nil if none has been found
+                def self.find_time_field(type)
+                    type.each_field
+                        .find { |_, field_type| field_type.name == "/base/Time" }
+                end
+
                 # @api private
                 #
                 # Guess the field that should be used for the frame's index
                 #
                 # It pickes the first /base/Time field
                 def guess_time_field
-                    time_field = @type
-                                 .each_field
-                                 .find { |_, field_type| field_type.name == "/base/Time" }
-                    return unless time_field
+                    field_name, = self.class.find_time_field(@type)
+                    return unless field_name
 
-                    time { |b| b.__send__(time_field[0]).microseconds }
+                    time { |b| b.__send__(field_name).microseconds }
+                end
+
+                # Returns true if a time field has either been guessed, or selected
+                def time_field_selected?
+                    @time_field
                 end
 
                 # Select the field that should be used as an index in the frame
+                #
+                # The selected field must be an integer representing a time whose
+                # scale is compatible with the time given as center time to
+                # {#to_daru_frame}
                 #
                 # If a "/base/Time" field can be found, it is automatically used
                 def time(&block)
