@@ -127,6 +127,16 @@ module Syskit
                 @interval_zero_time = time
             end
 
+            # Select how often will a sample be picked by e.g. to_daru_frame
+            # or samples_of
+            def interval_sample_every(samples: nil, seconds: nil)
+                unless (samples && !seconds) || (!samples && seconds)
+                    raise ArgumentError, "need exactly one of 'samples' or 'seconds'"
+                end
+
+                @interval_sample_every = samples || Time.at(seconds)
+            end
+
             # Reset the interval to the last interval selected by
             # {#interval_select_from_stream}
             def interval_reset(reset_zero: true)
@@ -170,21 +180,23 @@ module Syskit
             end
 
             # Convert fields of a data stream into a Daru frame
-            def to_daru_frame(stream)
-                samples = samples_of(stream)
+            def to_daru_frame(stream, every: @interval_sample_every)
+                samples = samples_of(stream, every: every)
                 builder = Daru::FrameBuilder.new(stream.type)
                 yield(builder)
                 builder.to_daru_frame(@interval_zero_time, samples)
             end
 
             # Resolve a sample enumerator from a stream object
-            def samples_of(stream)
+            def samples_of(stream, every: @interval_sample_every)
                 return stream if stream.kind_of?(Pocolog::SampleEnumerator)
 
                 samples = stream.samples
                 return samples unless @interval
 
-                samples.from(@interval[0]).to(@interval[1])
+                samples = samples.from(@interval[0]).to(@interval[1])
+                samples.every(every) if every
+                samples
             end
 
             def roby
