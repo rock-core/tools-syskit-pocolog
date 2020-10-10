@@ -2,6 +2,7 @@
 
 require "syskit/log"
 require "syskit/log/datastore"
+require "syskit/log/dsl/summary"
 
 module Syskit
     module Log
@@ -51,7 +52,10 @@ module Syskit
             #   dataset digest. Otherwise, it is used as a metadata query and
             #   given to {Datastore#find}
             def dataset_select(query = nil)
-                return (@dataset = datastore.get(query)) if query.respond_to?(:to_str)
+                if query.respond_to?(:to_str)
+                    @dataset = datastore.get(query)
+                    return summarize(@dataset)
+                end
 
                 matches =
                     if query
@@ -67,6 +71,8 @@ module Syskit
                 else
                     @dataset = __dataset_user_select(matches)
                 end
+
+                summarize(@dataset)
             end
 
             def __dataset_user_select(candidates)
@@ -262,6 +268,11 @@ module Syskit
                     df.no_index
                 end
                 frame["time"]
+            end
+
+            # Generic entry point to see information about an object
+            def summarize(object)
+                DSL::Summary.new(object)
             end
         end
     end

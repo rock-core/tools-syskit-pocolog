@@ -1,0 +1,21 @@
+<table>
+<thead>
+<tr>
+    <td>Name</td>
+    <td>Type</td>
+    <td>Size</td>
+    <td>From</td>
+    <td>To</td>
+</tr>
+</thead>
+
+<tr>
+    <td><%= data_stream.name %></td>
+    <td><%= data_stream.type.name %></td>
+    <td><%= data_stream.size %></td>
+    <td><%= data_stream.interval_lg.first %></td>
+    <td><%= data_stream.interval_lg.last %></td>
+</tr>
+</table>
+
+<%= object_to_html(data_stream.type, "type") %>

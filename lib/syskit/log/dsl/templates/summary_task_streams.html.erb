@@ -1,0 +1,27 @@
+<%= task_streams.task_name %> (<%= task_streams.orogen_model_name %>)
+<h3>Ports:</h3>
+<table>
+<thead>
+<tr>
+    <td>Name</td>
+    <td>Type</td>
+    <td>Size</td>
+    <td>From</td>
+    <td>To</td>
+</tr>
+</thead>
+
+<% task_streams.each_port_stream do |_, port| %>
+<tr>
+    <td><%= port.name %></td>
+    <td><%= port.type.name %></td>
+    <td><%= port.size %></td>
+    <td><%= port.interval_lg.first %></td>
+    <td><%= port.interval_lg.last %></td>
+</tr>
+<% end %>
+</table>
+
+<h3>Properties:</h3>
+<% task_streams.each_property_stream do |_, port| %>
+<% end %>

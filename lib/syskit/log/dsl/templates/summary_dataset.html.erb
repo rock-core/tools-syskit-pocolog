@@ -1,0 +1,25 @@
+<b> <%= dataset.metadata_fetch("description") %> (<%= dataset.digest %>) </b>
+<ul>
+<% dataset.metadata.each do |key, values| %>
+<li><%= key %>: <%= values.map(&:to_s).join(", ") %></li>
+<% end %>
+</ul>
+
+<% tasks = dataset.each_task.sort_by(&:task_name)
+                  .delete_if { |t| t.orogen_model_name == "logger::Logger" }
+%>
+<table>
+<thead>
+    <tr>
+        <td>Name</td>
+        <td>Model</td>
+    </tr>
+</thead>
+
+<% tasks.each do |task_streams| %>
+<tr>
+    <td><%= task_streams.task_name %></td>
+    <td><%= task_streams.orogen_model_name %></td>
+</tr>
+<% end %>
+</table>
