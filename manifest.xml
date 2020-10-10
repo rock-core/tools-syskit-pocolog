@@ -7,7 +7,7 @@
     <depend package="tools/syskit" />
     <depend package="rom-sql" />
     <depend package="ruby-sqlite3" />
-    <depend_optional package="daru" />
+    <depend_optional package="data_processing/daru" />
 
     <test_depend package="minitest" />
     <test_depend package="flexmock" />
