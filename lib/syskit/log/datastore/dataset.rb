@@ -578,8 +578,8 @@ module Syskit::Log
             #
             # @param (see Streams#each_task)
             def each_task(
-                load_models: true,
-                skip_tasks_without_models: true,
+                load_models: false,
+                skip_tasks_without_models: false,
                 raise_on_missing_task_models: false,
                 loader: Roby.app.default_loader, &block
             )
