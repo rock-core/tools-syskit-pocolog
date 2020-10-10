@@ -81,10 +81,30 @@ module Syskit
                 end
 
                 # @api private
-                ResolvedField = Struct.new :name, :path, :transform do
+                ResolvedField = Struct.new :name, :path, :type, :transform, :vector_transform do
                     def resolve(value)
                         v = path.resolve(value).first.to_ruby
                         transform ? transform.call(v) : v
+                    end
+
+                    def create_vector(max_size)
+                        if type <= Typelib::NumericType && !type.integer?
+                            GSL::Vector.alloc(max_size)
+                        else
+                            Array.new(max_size)
+                        end
+                    end
+
+                    def resize_vector(vector, actual_size)
+                        if type <= Typelib::NumericType && !type.integer?
+                            vector.subvector(actual_size).dup
+                        else
+                            vector[0, actual_size].dup
+                        end
+                    end
+
+                    def apply_vector_transform(vector)
+                        vector_transform ? vector_transform.call(vector) : vector
                     end
                 end
 
@@ -102,7 +122,9 @@ module Syskit
                               "field resolved to type #{builder.__type}, "\
                               "which is not simple nor transformed"
                     end
-                    ResolvedField.new(builder.__name, builder.__path, builder.__transform)
+                    ResolvedField.new(builder.__name, builder.__path,
+                                      builder.__type,
+                                      builder.__transform, builder.__vector_transform)
                 end
 
                 # Convert the registered fields into a Daru frame
@@ -124,15 +146,26 @@ module Syskit
                 #
                 # Implementation of {#to_daru_frame} if a time field has been selected
                 def to_daru_frame_with_time(center_time, samples)
-                    data = [[@time_field, []]] + @vector_fields.map { |p| [p, []] }
+                    data = @vector_fields.map do |field|
+                        [field, field.create_vector(samples.max_size)]
+                    end
+                    data = [[@time_field, []]] + data
+
+                    i = 0
                     samples.raw_each do |_, _, sample|
                         data.each do |field, path_data|
-                            path_data << field.resolve(sample)
+                            path_data[i] = field.resolve(sample)
                         end
+                        i += 1
                     end
 
                     time = data.shift[1]
                     shift_time_microseconds(time, center_time)
+
+                    data = data.map do |field, vector|
+                        v = field.resize_vector(vector, i)
+                        [field, field.apply_vector_transform(v)]
+                    end
 
                     create_daru_frame(time, data)
                 end

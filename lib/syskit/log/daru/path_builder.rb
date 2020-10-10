@@ -9,12 +9,14 @@ module Syskit
             # A dsl-based builder for {Typelib::Path}
             class PathBuilder < BasicObject
                 def initialize(
-                    type, name = "", path = ::Typelib::Path.new([]), transform = nil
+                    type, name = "", path = ::Typelib::Path.new([]),
+                    transform = nil, vector_transform = nil
                 )
                     @type = type
                     @name = name
                     @path = path
                     @transform = transform
+                    @vector_transform = vector_transform
                 end
 
                 def __type
@@ -33,18 +35,42 @@ module Syskit
                     @transform
                 end
 
+                def __vector_transform
+                    @vector_transform
+                end
+
                 def __terminal?
                     @transform ||
                         @type <= ::Typelib::NumericType ||
                         @type <= ::Typelib::EnumType
                 end
 
+                def vector_transform(&block)
+                    if @vector_transform
+                        raise ArgumentError, "there is already a vector transform block"
+                    elsif @transform
+                        raise ArgumentError, "cannot mix transform and vector transform"
+                    elsif !(@type <= ::Typelib::NumericType) || @type.integer?
+                        raise ArgumentError,
+                              "vector transforms can only be applied on "\
+                              "floating-point values"
+                    end
+
+                    ::Syskit::Log::Daru::PathBuilder.new(
+                        @type, @name, @path, nil, block
+                    )
+                end
+
                 def transform(&block)
-                    if @transform
+                    if @vector_transform
+                        raise ArgumentError, "cannot mix transform and vector transform"
+                    elsif @transform
                         raise ArgumentError, "there is already a transform block"
                     end
 
-                    ::Syskit::Log::Daru::PathBuilder.new(@type, @name, @path, block)
+                    ::Syskit::Log::Daru::PathBuilder.new(
+                        @type, @name, @path, block, nil
+                    )
                 end
 
                 def respond_to?(m)

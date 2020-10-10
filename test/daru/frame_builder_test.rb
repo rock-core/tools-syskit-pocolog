@@ -147,6 +147,8 @@ module Syskit
 
                     samples.should_receive(:raw_each)
                            .and_iterates(*iterations)
+                    samples.should_receive(:max_size)
+                           .and_return(10)
                     samples
                 end
             end
