@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "syskit/log/dsl"
+require "daru"
 
 module Syskit
     module Log # :nodoc:
@@ -161,6 +162,36 @@ module Syskit
                         [now + 10, now + 1, 20]
                     ]
                     assert_equal expected, samples.enum_for(:each).to_a
+                end
+            end
+
+            describe "#realign" do
+                it "raises if the first target time is earlier than the dataframe's" do
+                    time  = [10, 11, 12, 13, 14]
+                    vector = [1.1, 2.2, 3.3, 4.4, 5.5]
+                    df = ::Daru::DataFrame.new({ "time" => time, "data" => vector })
+
+                    target = [9, 10.1, 10.9]
+                    assert_raises(ArgumentError) { make_context.realign(target, df) }
+                end
+                it "raises if the last target time is later than the dataframe's" do
+                    time  = [10, 11, 12, 13, 14]
+                    vector = [1.1, 2.2, 3.3, 4.4, 5.5]
+                    df = ::Daru::DataFrame.new({ "time" => time, "data" => vector })
+
+                    target = [13.1, 13.9, 15]
+                    assert_raises(ArgumentError) { make_context.realign(target, df) }
+                end
+
+                it "picks the sample whose time is closest to the target time" do
+                    time  = [10, 11, 12, 13, 14]
+                    vector = [1.1, 2.2, 3.3, 4.4, 5.5]
+                    df = ::Daru::DataFrame.new({ "time" => time, "data" => vector })
+
+                    target = [10.1, 13.3, 13.9]
+                    result = make_context.realign(target, df)
+                    assert_equal target, result["time"].to_a
+                    assert_equal [1.1, 4.4, 5.5], result["data"].to_a
                 end
             end
 
