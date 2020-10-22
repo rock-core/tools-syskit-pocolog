@@ -287,6 +287,11 @@ module Syskit
                 DSL::Summary.new(object)
             end
 
+            # Sample period information about a port or all ports of a task
+            def periods(stream)
+                time_vector_of(stream).summary
+            end
+
             # Create a new dataframe "realigned" on the given times
             def realign(time, frame)
                 target_times = time.dup.to_a
