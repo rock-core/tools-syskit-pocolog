@@ -82,6 +82,26 @@ module Syskit::Log
             syskit_eager_load.samples
         end
 
+        # Return a data stream that starts at the given time
+        def from_logical_time(time)
+            syskit_eager_load.from_logical_time(time)
+        end
+
+        # Return a data stream that starts at the given time
+        def to_logical_time(time)
+            syskit_eager_load.to_logical_time(time)
+        end
+
+        # Enumerate the stream's samples, not converting the values to their Ruby equivalent
+        def raw_each(&block)
+            syskit_eager_load.raw_each(&block)
+        end
+
+        # Enumerate the stream's samples, converting the values to their Ruby equivalent
+        def each(&block)
+            syskit_eager_load.each(&block)
+        end
+
         def duration_lg
             if interval_lg.empty?
                 0

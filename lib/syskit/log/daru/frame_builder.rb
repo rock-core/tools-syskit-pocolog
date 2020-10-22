@@ -11,58 +11,33 @@ module Syskit
 
                 def initialize(type)
                     @type = type
-                    @time_field = nil
-                    @vector_fields = []
-
-                    guess_time_field if @type <= Typelib::CompoundType
+                    @fields = []
+                    @time_fields = []
                 end
 
-                # Return the field that should be used as a time
-                # index for samples of the given type
+                # Tests whether there is already a column with a given name
+                def column?(name)
+                    @fields.any? { |f| f.name == name }
+                end
+
+                # This builder's column names
+                def column_names
+                    @fields.map(&:name)
+                end
+
+                # Save the stream's logical time in the given column
+                def add_logical_time(name = "time")
+                    add_resolved_field(LogicalTimeField.new(name))
+                    @time_fields << (@fields.size - 1)
+                end
+
+                # Add a field that will be interpreted as time and shifted by center_time
                 #
-                # @return [(String,Typelib::Type),nil] the field name and type,
-                #    or nil if none has been found
-                def self.find_time_field(type)
-                    type.each_field
-                        .find { |_, field_type| field_type.name == "/base/Time" }
-                end
-
-                # @api private
-                #
-                # Guess the field that should be used for the frame's index
-                #
-                # It pickes the first /base/Time field
-                def guess_time_field
-                    field_name, = self.class.find_time_field(@type)
-                    return unless field_name
-
-                    time { |b| b.__send__(field_name).microseconds }
-                end
-
-                # Returns true if a time field has either been guessed, or selected
-                def time_field_selected?
-                    @time_field
-                end
-
-                # Select the field that should be used as an index in the frame
-                #
-                # The selected field must be an integer representing a time whose
-                # scale is compatible with the time given as center time to
-                # {#to_daru_frame}
-                #
-                # If a "/base/Time" field can be found, it is automatically used
-                def time(&block)
-                    @time_field = resolve_field(&block)
-                end
-
-                # Remove the automatically guessed time field
-                def no_time
-                    @time_field = nil
-                end
-
-                # Do not use time as index
-                def no_index
-                    @no_index = true
+                # The field must represent microseconds in the same frame than
+                # center_time
+                def add_time_field(name = nil, &block)
+                    field = add(name, &block)
+                    @time_fields << (@fields.size - 1)
                 end
 
                 # Extract a field as a column in the resulting frame
@@ -77,29 +52,35 @@ module Syskit
 
                     resolved = resolve_field(&block)
                     resolved.name = name if name
-                    @vector_fields << resolved
+                    add_resolved_field(resolved)
+                end
+
+                # @api private
+                #
+                # Register a resolved field
+                #
+                # @raise ArgumentError if the field's name is a duplicate
+                def add_resolved_field(resolved)
+                    if column?(resolved.name)
+                        raise ArgumentError, "field #{name} already defined"
+                    end
+
+                    @fields << resolved
+                    resolved
                 end
 
                 # @api private
                 ResolvedField = Struct.new :name, :path, :type, :transform, :vector_transform do
-                    def resolve(value)
+                    def resolve(_time, value)
                         v = path.resolve(value).first.to_ruby
                         transform ? transform.call(v) : v
                     end
 
-                    def create_vector(max_size)
+                    def create_vector(size)
                         if type <= Typelib::NumericType && !type.integer?
-                            GSL::Vector.alloc(max_size)
+                            GSL::Vector.alloc(size)
                         else
-                            Array.new(max_size)
-                        end
-                    end
-
-                    def resize_vector(vector, actual_size)
-                        if type <= Typelib::NumericType && !type.integer?
-                            vector.subvector(actual_size).dup
-                        else
-                            vector[0, actual_size].dup
+                            Array.new(size)
                         end
                     end
 
@@ -127,6 +108,39 @@ module Syskit
                                       builder.__transform, builder.__vector_transform)
                 end
 
+                # @api private
+                #
+                # Called during conversion to a frame to create the target vectors
+                # necessary to represent the data from this builder
+                def create_vectors(size)
+                    @fields.map { |f| f.create_vector(size) }
+                end
+
+                # @api private
+                #
+                # Called during resolution to update a data row
+                def update_row(vectors, row, time, sample)
+                    @fields.each_with_index do |f, i|
+                        vectors[i][row] = f.resolve(time, sample)
+                    end
+                end
+
+                # @api private
+                #
+                # Apply the center time on a time field if there is one
+                def recenter_time_vectors(vectors, center_time)
+                    center_time_usec =
+                        center_time.tv_sec * 1_000_000 + center_time.tv_usec
+
+                    @time_fields.each do |field_index|
+                        converted = GSL::Vector.alloc(vectors[0].size)
+                        vectors[field_index].each_with_index do |us, i|
+                            converted[i] = Float(us - center_time_usec) / 1_000_000.0
+                        end
+                        vectors[field_index] = converted
+                    end
+                end
+
                 # Convert the registered fields into a Daru frame
                 #
                 # @param [Time] center_time the time that should be used as
@@ -134,82 +148,49 @@ module Syskit
                 # @param [#raw_each] samples the object that will enumerate samples
                 #   It must yield [realtime, logical_time, sample] the way
                 #   Pocolog::SampleEnumerator does
-                def to_daru_frame(center_time, samples)
-                    if @time_field
-                        to_daru_frame_with_time(center_time, samples)
-                    else
-                        to_daru_frame_without_time(center_time, samples)
+                def to_daru_frame(center_time, streams)
+                    Daru.create_aligned_frame(
+                        center_time, [self], SingleStreamAdapter.new(streams.first),
+                        streams.first.size
+                    )
+                end
+
+                # @api private
+                #
+                # Adapter to resolve the logical time as a microseconds field
+                class LogicalTimeField
+                    attr_reader :name
+
+                    def initialize(name)
+                        @name = name
+                    end
+
+                    def resolve(time, _sample)
+                        time.tv_sec * 1_000_000 + time.tv_usec
+                    end
+
+                    def create_vector(size)
+                        Array.new(size)
+                    end
+
+                    def apply_vector_transform(vector)
+                        vector
                     end
                 end
 
                 # @api private
                 #
-                # Implementation of {#to_daru_frame} if a time field has been selected
-                def to_daru_frame_with_time(center_time, samples)
-                    data = @vector_fields.map do |field|
-                        [field, field.create_vector(samples.max_size)]
+                # Adapter to provide a StreamAligner-like interface compatible
+                # with daru's building procedure for a single pocolog stream
+                class SingleStreamAdapter
+                    def initialize(stream)
+                        @stream = stream
                     end
-                    data = [[@time_field, []]] + data
 
-                    i = 0
-                    samples.raw_each do |_, _, sample|
-                        data.each do |field, path_data|
-                            path_data[i] = field.resolve(sample)
+                    def raw_each
+                        @stream.raw_each do |_, lg, sample|
+                            yield(0, lg, sample)
                         end
-                        i += 1
-                    end
-
-                    time = data.shift[1]
-                    shift_time_microseconds(time, center_time)
-
-                    data = data.map do |field, vector|
-                        v = field.resize_vector(vector, i)
-                        [field, field.apply_vector_transform(v)]
-                    end
-
-                    create_daru_frame(time, data)
-                end
-
-                # @api private
-                #
-                # Apply the center time to an array of times expressed in microseconds
-                def shift_time_microseconds(time, center_time)
-                    start_time_us = center_time.tv_sec * 1_000_000 + center_time.tv_usec
-                    time.map! { |v| (v - start_time_us) / 1_000_000.0 }
-                end
-
-                # @api private
-                #
-                # Implementation of {#to_daru_frame} when there is no time
-                # field, in which case the sample's logical time is used
-                def to_daru_frame_without_time(center_time, samples)
-                    time = []
-                    data = @vector_fields.map { |p| [p, []] }
-                    samples.raw_each do |_, lg, sample|
-                        time << lg - center_time
-                        data.each do |field, path_data|
-                            path_data << field.resolve(sample)
-                        end
-                    end
-
-                    create_daru_frame(time, data)
-                end
-
-                # @api private
-                #
-                # Create the Daru frame from the index and vectors
-                #
-                # @return [Daru::DataFrame]
-                def create_daru_frame(time, vectors)
-                    vectors = vectors.each_with_object({}) do |(field, path_data), h|
-                        h[field.name] = path_data
-                    end
-
-                    if @no_index
-                        vectors["time"] = time
-                        ::Daru::DataFrame.new(vectors)
-                    else
-                        ::Daru::DataFrame.new(vectors, index: time)
                     end
                 end
             end

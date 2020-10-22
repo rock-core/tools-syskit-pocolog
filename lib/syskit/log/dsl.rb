@@ -1,6 +1,7 @@
 # frozen_string_literalr: true
 
 require "syskit/log"
+require "syskit/log/daru"
 require "syskit/log/datastore"
 require "syskit/log/dsl/summary"
 
@@ -18,6 +19,7 @@ module Syskit
 
             def __syskit_log_dsl_initialize
                 @datastore = Datastore.default if Datastore.default_defined?
+                @interval = []
                 @streams = {}
             end
 
@@ -134,7 +136,8 @@ module Syskit
                     raise ArgumentError, "need exactly one of 'samples' or 'seconds'"
                 end
 
-                @interval_sample_every = samples || Time.at(seconds)
+                @interval_sample_by_sample = samples
+                @interval_sample_by_time = seconds
             end
 
             # Reset the interval to the last interval selected by
@@ -180,23 +183,36 @@ module Syskit
             end
 
             # Convert fields of a data stream into a Daru frame
-            def to_daru_frame(stream, every: @interval_sample_every)
-                samples = samples_of(stream, every: every)
-                builder = Daru::FrameBuilder.new(stream.type)
-                yield(builder)
-                builder.to_daru_frame(@interval_zero_time, samples)
+            def to_daru_frame(*streams)
+                samples = streams.map { |s| samples_of(s) }
+                builders = streams.map { |s| Daru::FrameBuilder.new(s.type) }
+                yield(*builders)
+
+                @interval_zero_time ||= streams.first.interval_lg[0]
+
+                if builders.size == 1
+                    builders.first.to_daru_frame(@interval_zero_time, samples)
+                else
+                    joint_stream = Pocolog::StreamAligner.new(false, *samples)
+                    Daru.create_aligned_frame(
+                        @interval_zero_time, builders, joint_stream,
+                        samples.first.size
+                    )
+                end
             end
 
             # Resolve a sample enumerator from a stream object
-            def samples_of(stream, every: @interval_sample_every)
-                return stream if stream.kind_of?(Pocolog::SampleEnumerator)
-
-                samples = stream.samples
-                return samples unless @interval
-
-                samples = samples.from(@interval[0]).to(@interval[1])
-                samples.every(every) if every
-                samples
+            def samples_of(stream)
+                stream = stream.syskit_eager_load if stream.syskit_eager_load
+                stream = stream.from_logical_time(@interval[0]) if @interval[0]
+                stream = stream.to_logical_time(@interval[1]) if @interval[1]
+                if @interval_sample_by_sample
+                    stream = stream.resample_by_index(@interval_sample_by_sample)
+                end
+                if @interval_sample_by_time
+                    stream = stream.resample_by_time(@interval_sample_by_time)
+                end
+                stream
             end
 
             def roby
@@ -273,11 +289,13 @@ module Syskit
             end
 
             # Generating timing statistics of the given stream
-            def time_vector_of(stream, lg_time: false, &block)
+            def time_vector_of(stream, &block)
                 frame = to_daru_frame(stream) do |df|
-                    df.no_time if lg_time
-                    df.time(&block) if block
-                    df.no_index
+                    if block
+                        df.add_time_field("time", &block) if block
+                    else
+                        df.add_logical_time
+                    end
                 end
                 frame["time"]
             end
