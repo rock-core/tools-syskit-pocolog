@@ -18,19 +18,58 @@ module Syskit::Log
 
             ZERO_BYTE = [0].pack("v").freeze
 
-            Output = Struct
-                     .new(:path, :wio, :stream_info, :digest, :stream_block_pos,
-                          :index_map, :last_data_block_time) do
+            class Output
+                attr_reader :path, :stream_info, :digest, :stream_block_pos,
+                            :index_map, :last_data_block_time, :tell
+
+                WRITE_BLOCK_SIZE = 1024 ** 2
+
+                def initialize(path, wio, stream_info, digest, stream_block_pos)
+                    @path = path
+                    @wio = wio
+                    @stream_info = stream_info
+                    @stream_block_pos = stream_block_pos
+                    @digest = digest
+                    @index_map = []
+                    @tell = wio.tell
+                    @buffer = "".dup
+                end
+
+                def write(data)
+                    if data.size + @buffer.size > WRITE_BLOCK_SIZE
+                        @wio.write @buffer + data
+                        @tell += @buffer.size + data.size
+                        @buffer.clear
+                    else
+                        @buffer.concat(data)
+                    end
+                end
+
+                def flush
+                    @wio.write @buffer unless @buffer.empty?
+                    @wio.flush
+                    @tell += @buffer.size
+                    @buffer.clear
+                end
+
+                def close
+                    flush
+                    @wio.close
+                end
+
+                def create_block_stream
+                    Pocolog::BlockStream.new(@wio.dup)
+                end
+
                 def add_data_block(rt_time, lg_time, raw_data, raw_payload)
-                    raw_data = raw_data.dup
-                    raw_data[2, 2] = ZERO_BYTE
-                    index_map << wio.tell << lg_time
-                    wio.write raw_data
-                    wio.write raw_payload
-                    self.last_data_block_time = [rt_time, lg_time]
+                    @index_map << @tell << lg_time
+                    write raw_data[0, 2]
+                    write ZERO_BYTE
+                    write raw_data[4..-1]
+                    write raw_payload
+                    @last_data_block_time = [rt_time, lg_time]
                 end
             end
-
 
             DigestIO = Struct.new :wio, :digest do
                 def write(string)
@@ -83,10 +122,10 @@ module Syskit::Log
                         warn "normalize: exception caught while processing #{logfile_path}, deleting #{out_io.size} output files: #{out_io.map(&:path).sort.join(", ")}"
                         out_io.each do |output|
                             out_files.delete(output.path)
-                            wio = output.wio
-                            wio.close
-                            Pathname.new(wio.path).unlink
-                            index_path = Pathname.new(Pocolog::Logfiles.default_index_filename(wio.path, index_dir: index_dir))
+                            output.close
+
+                            Pathname.new(output.path).unlink
+                            index_path = Pathname.new(Pocolog::Logfiles.default_index_filename(output.path, index_dir: index_dir))
                             index_path.unlink if index_path.exist?
                         end
                         raise e
@@ -96,8 +135,7 @@ module Syskit::Log
                 # Now write the indexes
                 index_dir.mkpath
                 out_files.each_value do |output|
-                    wio = output.wio
-                    block_stream = Pocolog::BlockStream.new(wio)
+                    block_stream = output.create_block_stream
                     raw_stream_info = Pocolog::IndexBuilderStreamInfo.new(output.stream_block_pos, output.index_map)
                     stream_info = Pocolog.create_index_from_raw_info(block_stream, [raw_stream_info])
                     index_path = Pocolog::Logfiles.default_index_filename(output.path, index_dir: index_dir)
@@ -115,9 +153,7 @@ module Syskit::Log
                 end
 
             ensure
-                out_files.each_value do |output|
-                    output.wio.close
-                end
+                out_files.each_value(&:close)
             end
 
             NormalizationState =
@@ -200,7 +236,7 @@ module Syskit::Log
             rescue StandardError => e
                 [e, (state.out_io_streams || [])]
             ensure
-                state.out_io_streams.each { |output| output.wio.flush }
+                state.out_io_streams.each(&:flush)
                 in_block_stream&.close
             end
 
@@ -342,15 +378,13 @@ module Syskit::Log
                     digest = Digest::SHA256.new
                     wio = DigestIO.new(wio, digest)
                 end
-                output = Output.new(
-                    out_file_path, wio, stream_info, digest, nil, [], nil
-                )
 
-                raw_header[2, 2] = [0].pack("v")
-                wio.write initial_blocks
-                output.stream_block_pos = wio.tell
-                wio.write raw_header
-                wio.write raw_payload
+                output = Output.new(out_file_path, wio, stream_info, digest, wio.tell + initial_blocks.size)
+                output.write initial_blocks
+                output.write raw_header[0, 2]
+                output.write ZERO_BYTE
+                output.write raw_header[4..-1]
+                output.write raw_payload
                 out_files[out_file_path] = output
             rescue Exception => e # rubocop:disable Lint/RescueException
                 wio&.close
