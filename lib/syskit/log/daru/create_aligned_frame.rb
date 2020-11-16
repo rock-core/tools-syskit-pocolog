@@ -33,7 +33,7 @@ module Syskit
                     v
                 end
 
-                vectors.flatten
+                vectors.flatten(1)
             end
 
             def self.create_aligned_frame(center_time, builders, joint_stream, size)
