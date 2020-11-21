@@ -309,49 +309,6 @@ module Syskit
             def periods(stream)
                 time_vector_of(stream).summary
             end
-
-            # Create a new dataframe "realigned" on the given times
-            def realign(time, frame)
-                target_times = time.dup.to_a
-                source_times = frame["time"].to_a
-                if target_times.first < source_times.first
-                    raise ArgumentError,
-                          "first target time before first frame time"
-                elsif target_times.last > source_times.last
-                    raise ArgumentError,
-                          "last target time after last frame time"
-                end
-
-                mapping = []
-                target_t = target_times.shift
-                source_times.each_cons(2).each_with_index do |(last_t, next_t), i|
-                    next if last_t > target_t || next_t < target_t
-
-                    while target_t && next_t > target_t
-                        last_d = (target_t - last_t).abs
-                        next_d = (target_t - next_t).abs
-
-                        mapping <<
-                            if last_d < next_d
-                                i
-                            else
-                                i + 1
-                            end
-
-                        target_t = target_times.shift
-                    end
-
-                    break unless target_t
-                end
-
-                vectors = frame.each_vector_with_index
-                               .each_with_object({}) do |(vector, name), h|
-                    h[name] = ::Daru::Vector.new(vector.data.at_positions(mapping))
-                end
-
-                vectors["time"] = time
-                ::Daru::DataFrame.new(vectors)
-            end
         end
     end
 end
